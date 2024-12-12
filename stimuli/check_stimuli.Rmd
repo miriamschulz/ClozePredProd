@@ -1,0 +1,222 @@
+---
+title: "Check noun repetitions, continuations and question distributions"
+author: "Miriam Schulz"
+date: "2024-11-27"
+output:
+  html_document:
+    number_sections: true
+    toc: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# About
+
+This script reads in a `csv` stimuli file for the Cloze Prediction & Production experiment as well as the fillers file
+and checks for overlap of the nouns within and across both sets.
+
+
+# Duplicate checks
+
+## Check if there are duplicate nouns in the items (context and target nouns)
+
+In a first step, the data is read in and the chosen items (indicated by a $1$ in the column `picked`) are subsetted:
+
+```{r, message=FALSE}
+library("tidyverse")
+```
+
+```{r cars}
+# Read in the data
+dat <- read.csv("stim_cand.csv", header=TRUE)
+
+# Filter the data set for the chosen candidate items
+dat <- filter(dat, candidates=="1")
+
+# Print items that do not occur exactly twice
+subset(as.data.frame(xtabs(~ item_id + candidates, dat)), Freq != 2)
+```
+
+Write a function that will check if a word appears more than once,
+either in the context nouns, in the target nouns, or across context and target nouns:
+
+```{r}
+check_overlap <- function(data, col1, col2) {
+  # Check duplicates within each column
+  duplicates_col1_table <- sort(table(data[[col1]])[table(data[[col1]]) > 2], decreasing=TRUE) / 2
+  duplicates_col1 <- names(duplicates_col1_table)
+  print("Duplicates within the context nouns:")
+  print(duplicates_col1_table)
+  
+  duplicates_col2_table <- sort(table(data[[col2]])[table(data[[col2]]) > 1], decreasing=TRUE)
+  duplicates_col2 <- names(duplicates_col2_table)
+  print("Duplicates in the target nouns:")
+  print(duplicates_col2_table)
+  
+  # Check for words appearing in both columns
+  #duplicates_all_table <- (table(data[[col1]]) / 2) + (table(data[[col2]]))
+  table1 <- table(data[[col1]]) / 2
+  table2 <- table(data[[col2]])
+  all_names <- union(names(table1), names(table2))
+  aligned_table1 <- table1[all_names]
+  aligned_table2 <- table2[all_names]
+  aligned_table1[is.na(aligned_table1)] <- 0
+  aligned_table2[is.na(aligned_table2)] <- 0
+  duplicates_all_table <- sort(aligned_table1 + aligned_table2, decreasing=TRUE)
+  duplicates_all_table <- duplicates_all_table[!is.na(names(duplicates_all_table))]
+
+  print("Duplicates across both context and target nouns:")
+  print(duplicates_all_table)
+  
+  common_words <- intersect(data[[col1]], data[[col2]])
+  
+  # Return results as a list
+  return(list(
+    duplicates_in_col1 = duplicates_col1,
+    duplicates_in_col2 = duplicates_col2,
+    common_words = common_words
+  ))
+}
+```
+
+Print the deuplicate nouns:
+
+```{r}
+overlap <- check_overlap(dat, "W3", "response")
+overlap
+```
+
+
+## Detect if a noun is still free to use in the fillers
+
+Check if a noun has been used as context or target noun in the items, or if it is still free to use as a noun in the fillers:
+
+```{r}
+# Create a set of all nouns used as context or target noun in the items:
+noun_set <- sort(unique(c(dat$W3, dat$response)))
+# Check if a specific word is present in this set (TRUE/FALSE):
+"mother" %in% noun_set
+"work" %in% noun_set
+```
+
+
+## Check the fillers for overlap with the items
+
+Once the fillers have been written, we should check again if there are any nouns in the final filler set that occur as context/target noun in the items.
+
+Read in the file `fillers.csv` and write a function to check for overlap with the item noun set:
+
+```{r}
+# Read in the fillers
+fillers <- read.csv("fillers.csv", header=TRUE)
+
+# Merge the context sentence and target columns into a single vector
+filler_sentences <- c(fillers$Sentence, fillers$Target)
+
+# Split the sentences into individual words
+filler_words <- unique(tolower(unlist(strsplit(filler_sentences, "\\s+"))))
+filler_words <- filler_words[filler_words != ""]  # remove empty string
+#head(filler_words)
+```
+
+```{r}
+check_filler_overlap <- function(item_nouns, filler_words) {
+  for (w in filler_words) {
+    if (w %in% item_nouns) {
+      print(w)
+    }
+  }
+}
+
+check_filler_overlap(noun_set, filler_words)
+```
+
+
+# Continuations
+
+## Check the continuations (spillover regions)
+
+How often is each continuation (spillover word 1 + spillover word 2) used?
+
+```{r}
+spill <- select(dat, Spill1, Spill2)
+
+# Check both spillover words as combination
+spill$Spillover <- paste(spill$Spill1, spill$Spill2, sep = " ")
+spillover_table <- data.frame(sort(xtabs(~ Spillover, spill) / 2, decreasing = TRUE))
+write.csv(spillover_table, "spillover_counts.csv", row.names=FALSE)
+
+# Check first spillover word only
+spill1_table <- data.frame(sort(xtabs(~ Spill1, spill) / 2, decreasing = TRUE))
+write.csv(spill1_table, "spillover_counts_spill1.csv", row.names=FALSE)
+```
+
+
+# Comprehension questions
+
+## Check the comprehension questions in the items
+
+```{r}
+dat$Sentence <- paste(dat$W1, dat$W2, dat$W3, dat$W4, dat$W5, 
+                      dat$LastWord, dat$response,
+                      dat$Spill1, dat$Spill2, dat$Continuation, dat$End,
+                      sep = " ")
+                      
+questions <- select(dat, item_id, Sentence, HasQuestion, Question, Answer, QuestionAbout)
+
+# Check that 1/3 of all items have a question:
+length(unique(questions$item_id))  # N all items
+xtabs(~ HasQuestion, questions) /2  # N items with question
+
+# Subset
+questions <- filter(questions, HasQuestion == "Yes")
+
+# Check that there is a question about each sentence position equally often
+xtabs(~ QuestionAbout, questions) / 2
+
+# Check that each sentence position has a true vs. false answer equally often
+xtabs(~ Answer + QuestionAbout, questions) / 2
+```
+
+Inspect the actual questions:
+
+```{r}
+questions <- arrange(questions, QuestionAbout, Answer, item_id)
+questions$HasQuestion <- NULL
+questions$Answer <- ifelse(questions$Answer == "D", "False", "True")
+write.csv(questions, "comprehension_questions.csv", row.names=FALSE)
+```
+
+
+## Check the comprehension questions in the fillers
+
+```{r}
+fillers <- filter(fillers, !(FillerType %in% c("prac_comprehension", "prac_production")))
+questions_fillers <- select(fillers, Filler_id, FillerType, UnexpectedNoun, Sentence, Target,
+                            HasQuestion, Question, Answer, QuestionAbout)
+
+# Check that 1/3 of all items have a question:
+length(unique(questions_fillers$Filler_id))  # N all fillers
+xtabs(~ HasQuestion, questions_fillers)  # N fillers with question
+
+# Subset
+questions_fillers <- filter(questions_fillers, HasQuestion == "Yes")
+
+# Check that there is a question about each sentence position ~ equally often
+xtabs(~ QuestionAbout, questions_fillers)
+
+# Check that each sentence position has a true vs. false answer ~ equally often
+xtabs(~ Answer + QuestionAbout, questions_fillers)
+
+# Check that each filler type has equal amounts of true/false answers
+xtabs(~ FillerType + Answer, questions_fillers)
+
+# Check that there are some unexpected nouns with questions
+# (but distribution won't be 50-50 bc there are fewer unexpected noun fillers)
+xtabs(~ UnexpectedNoun, questions_fillers)
+```
+

@@ -1,0 +1,266 @@
+---
+title: "RELIN results"
+author: "Miriam Schulz"
+date: "2024-11-20"
+output:
+  html_document:
+    number_sections: true
+    toc: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# About
+
+This script preprocesses the raw PC Ibex results of the Cloze prediction & production experiment.
+
+What this script does:
+
+- split the data into a production and a comprehension data set
+- check data for completeness
+- calculate by-participant and overall accuracy
+- calculate by-participant and overall production RTs
+- summary of demographics
+- summary of post-experimental survey
+
+
+# Read PCIbex results
+
+Define a function to read in the raw `csv` results file as downloaded from PC Ibex:
+
+```{r, message = FALSE}
+# Preliminaries
+rm(list = ls())
+library(tidyverse)
+
+read.pcibex <- function(filepath, auto.colnames=TRUE, fun.col=function(col,cols){cols[cols==col]<-paste(col,"Ibex",sep=".");return(cols)}) {
+  n.cols <- max(count.fields(filepath,sep=",",quote=NULL),na.rm=TRUE)
+  if (auto.colnames){
+    cols <- c()
+    con <- file(filepath, "r")
+    while ( TRUE ) {
+      line <- readLines(con, n = 1, warn=FALSE)
+      if ( length(line) == 0) {
+        break
+      }
+      m <- regmatches(line,regexec("^# (\\d+)\\. (.+)\\.$",line))[[1]]
+      if (length(m) == 3) {
+        index <- as.numeric(m[2])
+        value <- m[3]
+        if (is.function(fun.col)){
+          cols <- fun.col(value,cols)
+        }
+        cols[index] <- value
+        if (index == n.cols){
+          break
+        }
+      }
+    }
+    close(con)
+    return(read.csv(filepath, comment.char="#", header=FALSE, col.names=cols))
+  }
+  else{
+    return(read.csv(filepath, comment.char="#", header=FALSE, col.names=seq(1:n.cols)))
+  }
+}
+```
+
+Read data frame:
+
+```{r}
+df <- read.pcibex('results_dev.csv')
+#check <- df %>% filter(UniqueID=="NULL")
+df <- unique(df)
+df <- df[!df$UniqueID %in% c('SomeUniqueID'), ]  # remove subject(s)
+```
+
+
+
+
+# Demographics
+
+```{r}
+df.demogs <- df %>%
+  filter(PennElementName == 'demographics') %>% 
+  select(UniqueID, Parameter, Value)
+
+# Fix whitespace characters
+df.demogs$Value <- gsub('%2C', ',', df.demogs$Value)   # commas instead of %2C
+df.demogs$Value <- gsub('%0A', ' ', df.demogs$Value)   # spaces instead of %0A
+
+# Transform to wide format
+df.demogs <- df.demogs %>%
+  pivot_wider(names_from = Parameter, values_from = Value)
+
+# Make all variables factors and then age numeric
+df.demogs[] <- lapply(df.demogs, tolower)
+df.demogs[] <- lapply(df.demogs, as.factor)
+df.demogs$Age <- as.numeric(df.demogs$Age)
+
+#summary(df.demogs)
+#str(df.demogs)
+df.demogs
+
+# Native languages
+summary(df.demogs$Native_language)
+
+# Age
+mean(df.demogs$Age)
+range(df.demogs$Age)
+
+# Gender
+summary(df.demogs$Gender)
+
+write.csv(df.demogs, "results_demographics.csv", row.names=FALSE)
+```
+
+
+# Post-experimental survey
+
+```{r}
+df.survey <- df %>%
+  filter(PennElementName == 'postexp_survey') %>% 
+  select(UniqueID, Parameter, Value)
+df.survey$Value <- gsub('%2C', ',', df.survey$Value)   # commas instead of %2C
+df.survey$Value <- gsub('%0A', ' ', df.survey$Value)   # spaces instead of %0A
+
+# Transform to wide format
+df.survey <- df.survey %>%
+  pivot_wider(names_from = Parameter, values_from = Value)
+
+df.survey[] <- lapply(df.survey, as.factor)
+summary(df.survey$Experiment_length)
+summary(df.survey$Task_difficulty)
+
+write.csv(df.survey, "results_postexp_survey.csv", row.names=FALSE)
+```
+
+
+
+# Extract comprehension and production data
+
+Split into a production and a comprehension data set:
+
+```{r}
+comp <- filter(df, Label == "comprehension")
+comp$Newline. <- NULL
+comp$SentenceEnd <- NULL
+comp <- select(comp, 10:29)
+colnames(comp) <- c("WordPosition", "Word", "EventTime",
+                    "UniqueID", "LatinList", "Block",
+                    "ExpItemNum", "ExpItemType", "ExpCondition",
+                    "TargetPosition", "TargetWord", "TargetFreq",
+                    #"SentenceEnd",
+                    "TrialCounterGlobal", "TrialCounterComprehension",
+                    "TargetAnswer", "QuestionText", "CorrectAnswer",
+                    "RunningAccuracy",
+                    "RT", "Sentence")
+
+
+prod <- filter(df, Label == "production")
+prod$Newline. <- NULL
+prod$RunningAccuracy <- NULL
+prod <- select(prod, 10:29)
+colnames(prod) <- c("WordPosition", "Word", "EventTime",
+                    "UniqueID", "LatinList", "Block",
+                    "ExpItemNum",  "ExpItemType", "ExpCondition",
+                    "TargetPosition", "TargetWord", "TargetFreq",
+                    "SentenceEnd",
+                    "TrialCounterGlobal", "TrialCounterComprehension",
+                    "RecordingFilename", "ProductionTime", "ProductionTimeout",
+                    #"RunningAccuracy",
+                    "RT", "Sentence")
+```
+
+
+## Comprehension accuracy
+
+```{r}
+# Extract all logged key presses
+df.key <- df %>% filter(PennElementName == 'ComprehensionKey')
+df.key$TrialAccuracy <- ifelse(df.key$CorrectAnswer == "true", 1, 0)
+
+df.key.prac <- df.key %>% filter(Label == 'practice')
+df.key.trials <- df.key %>% filter(Label == 'comprehension')
+
+# Completeness checks
+table(xtabs(~ UniqueID, df.key)) # comprehension trials + comprehension practice
+table(xtabs(~ UniqueID, df.key.trials))  # should equal N of comprehension trials
+
+# Acc for all trials
+df.acc.subj <- df.key %>%
+  group_by(UniqueID) %>%
+  summarize(Accuracy = mean(TrialAccuracy))
+df.acc.subj
+round(range(df.acc.subj$Accuracy), 2)
+mean(df.acc.subj$Accuracy)
+
+# Acc only critical trials
+df.acc.subj <- df.key.trials %>%
+  group_by(UniqueID) %>%
+  summarize(Accuracy = mean(TrialAccuracy))
+df.acc.subj
+
+round(range(df.acc.subj$Accuracy), 2)
+mean(df.acc.subj$Accuracy)
+```
+
+
+## Completeness check
+
+Check the item-condition and item-condition-Latin square completeness:
+
+```{r}
+# Comprehension questions
+xtabs(~ ExpCondition + ExpItemNum, df.key.trials)
+xtabs(~ ExpCondition + ExpItemNum + LatinList, df.key.trials)
+
+# Recording filenames
+length(unique(prod$RecordingFilename))
+```
+
+
+## Production time
+
+```{r}
+# Mean production time and task RT
+prod.targets <- filter(prod, WordPosition == TargetPosition)
+
+mean(as.numeric(prod.targets$ProductionTime))
+
+# N of timeouts during production (> 4 sec)
+summary(as.factor(prod.targets$ProductionTimeout))
+
+# Timeouts by subject 
+prod.timeouts <- xtabs(~ UniqueID + ProductionTimeout, prod.targets)#[, 2]
+range(prod.timeouts[1,])
+hist(prod.timeouts,
+     breaks=max(prod.timeouts),
+     col='steelblue')
+```
+
+
+## RTs (superficial first check)
+
+```{r}
+comp.targets <- filter(comp, WordPosition == TargetPosition)
+comp.targets$RT <- as.numeric(comp.targets$RT)
+prod.targets$RT <- as.numeric(prod.targets$RT)
+mean(comp.targets$RT)
+mean(prod.targets$RT)
+
+comp.targets %>%
+  group_by(ExpCondition) %>%
+  summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
+  print()
+
+prod.targets %>%
+  group_by(ExpCondition) %>%
+  summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
+  print()
+```
+

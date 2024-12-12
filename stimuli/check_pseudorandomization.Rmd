@@ -1,0 +1,44 @@
+---
+title: "Check pseudorandomization for correctness and completeness"
+author: "Miriam Schulz"
+date: "2024-11-27"
+output:
+  html_document:
+    number_sections: true
+    toc: true
+---
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+# About
+
+This script compares the pseudorandomized file produced by `pseudorandomize.py` with the original items file.
+
+
+
+```{r, message=FALSE}
+rm(list = ls())
+library("tidyverse")
+```
+
+
+```{r}
+original <- read.csv("comprehension_l1.csv", header=TRUE)
+pseudorand <- read.csv("test_pseudorandomization.csv", header=TRUE)
+```
+
+```{r}
+nrow(original)
+nrow(pseudorand)
+```
+
+```{r}
+missing <- anti_join(original, pseudorand, by = "ItemNum")
+nrow(missing)
+sort(missing$ItemNum)
+```
+

@@ -1,0 +1,242 @@
+---
+title: "Format stimuli for PCIbex"
+author: "Miriam Schulz"
+date: "2024-11-21"
+output:
+  html_document:
+    number_sections: true
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# About
+
+This script reads in a `csv` stimuli file for the Cloze Prediction & Production experiment and transforms the items to a `csv` file that can be used as a data file on PCIbex.
+
+
+# Experimental items
+
+## Select chosen items
+
+In a first step, the data is read in and the chosen items (indicated by a $1$ in the column `picked`) are subsetted:
+
+```{r, message=FALSE}
+library("tidyverse")
+```
+
+```{r}
+rm(list = ls())  # optional, clear workspace
+dat <- read.csv("stim_cand.csv", header=TRUE)
+dat <- filter(dat, candidates=="1")
+xtabs(~ candidates + item_id, dat)
+
+# Print items that do not occur exactly twice
+subset(as.data.frame(xtabs(~ item_id + candidates, dat)), Freq != 2)
+
+# Read in fillers
+fillers <- read.csv("fillers.csv", header=TRUE)
+```
+
+
+## Transform to PCIbex formatting
+
+We want to generate two files from this: a `comprehension.csv` and a `production.csv` file.
+
+First, select the necessary columns.
+
+### Preprocess items
+
+```{r}
+dat <- rename(dat,  ItemNum = item_id)
+dat <- rename(dat,  TargetWord = response)
+dat$Type <- "ExpItem"
+dat$ExpCondition <- rep(c("High", "Low"), times=nrow(dat)/2)
+dat$TargetPosition <- 6
+dat$Group <- rep(c(1, 2, 2, 1), times=nrow(dat)/2)[1:nrow(dat)]  #TODO create actual Latin groups
+dat$Block <- rep(c("comp", "prod", "prod", "comp",
+                   "prod", "comp", "comp", "prod"),
+              each=2,
+              times=nrow(dat)/2)[1:nrow(dat)]
+xtabs(~ Block, dat)
+
+dat$Sentence <- paste(dat$W1, dat$W2, 
+                              dat$W3, dat$W4,
+                              dat$LastWord, dat$TargetWord, 
+                              dat$Spill1, dat$Spill2,
+                              dat$Continuation, #dat$End,
+                              sep = " ")
+
+dat <- select(
+  dat,
+  c(
+    "Group", "Block", "ItemNum",
+    "Type", "ExpCondition",
+    "Sentence", "End",
+    "TargetPosition", "TargetWord", "Lg10WF",
+    "HasQuestion", "Question", "Answer"
+  )
+)
+```
+
+Remove any trailing whitespaces in the fillers and items:
+
+```{r}
+dat <- dat %>% 
+  mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
+
+dat$TargetWord <- trimws(dat$TargetWord, which = "both")
+
+fillers <- fillers %>% 
+  mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
+
+fillers$Target <- trimws(fillers$Target, which = "both")
+```
+
+
+### Preprocess fillers
+
+```{r}
+fillers <- rename(fillers,  ItemNum = Filler_id)
+fillers <- rename(fillers, ExpCondition = FillerType)
+fillers$Type <- "ExpFiller"
+
+# Split into practice vs. fillers
+fillers$ItemNum <- as.numeric(fillers$ItemNum)
+prac <- filter(fillers, ItemNum > 500)
+fillers <- filter(fillers, ItemNum < 500)
+
+# Make the filler numbers higher: start at 1001
+fillers$ItemNum <- fillers$ItemNum + 1000
+
+# Append to the filler condition if something is unexpected
+fillers$Unexpected <- ifelse(fillers$UnexpectedNoun == "yes", "Unexp", "Exp")
+fillers$ExpCondition <- paste(fillers$ExpCondition, fillers$Unexpected, sep="_")
+
+fillers$Group <- 0  #TODO create actual Latin groups
+fillers$Block <- rep(c("comp", "prod", "prod", "comp",
+                       "prod", "comp", "comp", "prod"),
+              times=nrow(fillers))[1:nrow(fillers)]
+xtabs(~ Block, fillers)
+
+fillers <- rename(fillers, End = Target)
+fillers$TargetPosition <- NA
+fillers$TargetWord <- NA
+fillers$Lg10WF <- NA
+
+fillers <- select(
+  fillers,
+  c(
+    "Group", "Block", "ItemNum",
+    "Type", "ExpCondition",
+    "Sentence", "End",
+    "TargetPosition", "TargetWord", "Lg10WF",
+    "HasQuestion", "Question", "Answer"
+  )
+)
+```
+
+Merge fillers and items
+
+```{r}
+summary(colnames(dat) == colnames(fillers))
+all <- rbind(dat, fillers)
+```
+
+Split into production and comprehension block, check stats
+
+```{r}
+comp <- filter(all, Block == "comp")
+prod <- filter(all, Block == "prod")
+
+xtabs(~ Type, prod)
+xtabs(~ Type, comp)
+
+xtabs(~ HasQuestion, prod)
+xtabs(~ HasQuestion, comp)
+
+xtabs(~ Answer, prod)
+xtabs(~ Answer, comp)
+```
+
+
+### Comprehension block
+
+For the comprehension file, we can simply concatenate the entire sentence into a string:
+
+```{r}
+comp$Sentence <- paste(comp$Sentence, comp$End, sep = " ")
+comp <- comp %>% 
+  mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
+#comp$End <- NULL
+
+comp_l1 <- filter(comp, Group %in% c(0, 1))
+comp_l1$Group <- 1
+comp_l2 <- filter(comp, Group %in% c(0, 2))
+comp_l2$Group <- 2
+write.csv(comp_l1, "comprehension_l1.csv", row.names=FALSE)
+write.csv(comp_l2, "comprehension_l2.csv", row.names=FALSE)
+```
+
+```{r}
+nrow(comp_l1)
+xtabs(~ Type, comp_l1)
+xtabs(~ ExpCondition, comp_l1)
+```
+
+
+### Production block
+
+```{r}
+#prod$End <- NULL
+prod <- prod %>% 
+  mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
+prod$Sentence <- trimws(prod$Sentence, which = "both")
+
+prod_l1 <- filter(prod, Group %in% c(0, 1))
+prod_l1$Group <- 1
+prod_l2 <- filter(prod, Group %in% c(0, 2))
+prod_l2$Group <- 2
+write.csv(prod_l1, "production_l1.csv", row.names=FALSE)
+write.csv(prod_l2, "production_l2.csv", row.names=FALSE)
+```
+
+
+
+# Practice items
+
+```{r}
+prac$Group <- 1  #TODO
+prac$Block <- "prac"
+prac$Type <- "ExpPractice"
+prac$TargetPosition <- NA
+prac$TargetWord <- NA
+prac$Lg10WF <- NA
+prac <- rename(prac,  End = Target)
+
+prac$Sentence <- ifelse(prac$ExpCondition == "prac_comprehension",
+                        paste(prac$Sentence, prac$End, sep = " "),
+                        prac$Sentence)
+    
+prac <- select(
+  prac,
+  c("Group", "Block", "ItemNum",
+    "Type", "ExpCondition",
+    "Sentence", "End",
+    "TargetPosition", "TargetWord", "Lg10WF",
+    "HasQuestion", "Question", "Answer"
+  )
+)
+
+# Add columns required by PCIbex to subset the comp/prod practice items:
+prac$label <- 0
+prac$group <- 0
+```
+
+```{r}
+write.csv(prac, "practice.csv", row.names=FALSE)
+```
+
+
