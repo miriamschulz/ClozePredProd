@@ -6,14 +6,15 @@
 PennController.ResetPrefix(null);
 DebugOff()
 
-Sequence(//"preload_trials",
-         //"welcome",
-         //"consent",
+Sequence(
+         "preload_trials",
+         "welcome",
+         "consent",
 
          "init_record",
-         //"recording_test",            // (new version)
-         //"sendAsync", // send first recording from the audio test
-         //"demographics",
+         "recording_test",
+         "sendAsync", // send first recording from the audio test
+         "demographics",
 
          // Block 1: Comprehension
          "instructions_comp1",
@@ -224,31 +225,6 @@ PennController("instructions_comp1",
         .log()
         .print()
     ,
-    // newText("LeftText", "No")
-    // ,
-    // newText("RightText", "Yes")
-    // ,
-    // newCanvas(500,150)
-    //     .add(100,10, newText("Key D").cssContainer({"font-family": "monospace", "font-size": "20px", "padding": "20px 10px 10px 10px"}))
-    //     .add(370,10, newText("Key K").cssContainer({"font-family": "monospace", "font-size": "20px", "padding": "20px 10px 10px 10px"}))
-    //     .add(100,60, getText("LeftText").bold().cssContainer(
-    //         {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 20px 10px 20px"}))
-    //     .add(370,60, getText("RightText").bold().cssContainer(
-    //         {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 12px 10px 12px"}))
-    //     .log()
-    //     .center()
-    //     .print()
-    // ,
-    // // newText("<p>Nach jedem Block erfahren Sie, wie gut Sie die Aufgabe bearbeitet haben.</p>")
-    // //     .cssContainer({"font-family": "serif", "font-size": "20px"})
-    // //     .left()
-    // //     .print()
-    // // ,
-    // newText("<p>You will now begin with a few practice sentences.</p>")
-    //     .cssContainer({"font-size": "20px"})
-    //     .left()
-    //     .print()
-    // ,
     newButton("See examples")
         .print()
         .wait()
@@ -279,7 +255,6 @@ PennController("instructions_comp2",
   )
   .log("TrialType", "Survey")
 
-
 // Production instructions
 PennController("instructions_prod1",
     newHtml("instructions_prod1", "instructions_prod1.html")
@@ -309,17 +284,6 @@ PennController("instructions_prod2",
          .wait()
 )
 .log("TrialType", "Survey")
-
-//  newTrial("instructions_prod4",
-//      newText("Now let's practice!<br><br><b>Remember to use the <u>space bar</u> to see the next word.</b>.<br><br>Please answer a continuation to each sentence.<br>Your answers will not be recorded in the practice session.<br><br>")
-//           .cssContainer({"font-size": "20px"})
-//           .print()
-//      ,
-//      newButton("Start practice session")
-//          .print()
-//          .wait()
-// )
-// .log("TrialType", "Survey")
 
 PennController("instructions_prod4",
     newHtml("instructions_prod4", "instructions_prod4.html")
@@ -359,77 +323,6 @@ Template(
             .wait()
             .remove()
         ,
-        // newText("cross","#")
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer1", 800).start().wait()
-        // ,
-        // getText("cross").remove()
-        // ,
-        // newText("w1", row.w1)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer2", 300).start().wait()
-        // ,
-        // getText("w1").remove()
-        // ,
-        // newTimer("timer3", 230).start().wait()
-        // ,
-        // newText("w2", row.w2)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer4", 300).start().wait()
-        // ,
-        // getText("w2").remove()
-        // ,
-        // newTimer("timer5", 230).start().wait()
-        // ,
-        // newText("w3", row.w3)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer6", 300).start().wait()
-        // ,
-        // getText("w3").remove()
-        // ,
-        // newTimer("timer7", 230).start().wait()
-        // ,
-        // newText("w4", row.w4)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer8", 300).start().wait()
-        // ,
-        // getText("w4").remove()
-        // ,
-        // newTimer("timer9", 230).start().wait()
-        // ,
-        // newText("w5", row.w5)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer(300)
-        //     .start()
-        //     .wait()
-        // ,
-        // getText("w5").remove()
-        // ,
-        // newTimer("timer10", 230).start().wait()
-        // ,
-        //
-        // newText("w6", row.w6)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer11", 300).start().wait()
-        // ,
-        // getText("w6")
-        //     .remove()
-        // ,
-
         // Blue background
         newFunction("BlueBackground", ()=>$("body").css("background-color", "rgba(173, 216, 230, 0.5)") ).call()
         ,
@@ -441,8 +334,7 @@ Template(
             .wait()
         ,
         newText("ContinueText", "Press Enter to continue.")
-            // .cssContainer({"font-size": "30px"})
-            .cssContainer({"font-size": "40px", "clear": "both", "line-height": "400%", "color": "red"})
+            .cssContainer({"font-size": "30px"})
             .print("center at 50vw", "middle at 40vh")
             .center()
             .italic()
@@ -480,76 +372,6 @@ Template(
             .wait()
             .remove()
         ,
-        // newText("cross","#")
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer1", 800).start().wait()
-        // ,
-        // getText("cross").remove()
-        // ,
-        // newText("w1", row.w1)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer2", 300).start().wait()
-        // ,
-        // getText("w1").remove()
-        // ,
-        // newTimer("timer3", 230).start().wait()
-        // ,
-        // newText("w2", row.w2)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer4", 300).start().wait()
-        // ,
-        // getText("w2").remove()
-        // ,
-        // newTimer("timer5", 230).start().wait()
-        // ,
-        // newText("w3", row.w3)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer6", 300).start().wait()
-        // ,
-        // getText("w3").remove()
-        // ,
-        // newTimer("timer7", 230).start().wait()
-        // ,
-        // newText("w4", row.w4)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer8", 300).start().wait()
-        // ,
-        // getText("w4").remove()
-        // ,
-        // newTimer("timer9", 230).start().wait()
-        // ,
-        // newText("w5", row.w5)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer(300)
-        //     .start()
-        //     .wait()
-        // ,
-        // getText("w5").remove()
-        // ,
-        // newTimer("timer10", 230).start().wait()
-        // ,
-        // newText("w6", row.w6)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer11", 300).start().wait()
-        // ,
-        // getText("w6")
-        //     .remove()
-        // ,
-
         // Blue background
         newFunction("BlueBackground", ()=>$("body").css("background-color", "rgba(173, 216, 230, 0.5)") ).call()
         ,
@@ -591,84 +413,6 @@ Template(
             .wait()
             .remove()
         ,
-        // newText("cross","#")
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     // .css({"font-size":"40"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer1", 800).start().wait()
-        // ,
-        // getText("cross").remove()
-        // ,
-        // newText("w1", row.w1)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     // .css({"font-size":"40"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer2", 300).start().wait()
-        // ,
-        // getText("w1").remove()
-        // ,
-        // newTimer("timer3", 230).start().wait()
-        // ,
-        // newText("w2", row.w2)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     // .css({"font-size":"40"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer4", 300).start().wait()
-        // ,
-        // getText("w2").remove()
-        // ,
-        // newTimer("timer5", 230).start().wait()
-        // ,
-        // newText("w3", row.w3)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     // .css({"font-size":"40"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer6", 300).start().wait()
-        // ,
-        // getText("w3").remove()
-        // ,
-        // newTimer("timer7", 230).start().wait()
-        // ,
-        // newText("w4", row.w4)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     // .css({"font-size":"40"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer8", 300).start().wait()
-        // ,
-        // getText("w4").remove()
-        // ,
-        // newTimer("timer9", 230).start().wait()
-        // ,
-        // newText("w5", row.w5)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     // .css({"font-size":"40"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer(300)
-        //     .start()
-        //     .wait()
-        // ,
-        // getText("w5").remove()
-        // ,
-        // newTimer("timer10", 230).start().wait()
-        // ,
-        //
-        // newText("w6", row.w6)
-        //     .cssContainer({"font-family": "monospace", "font-size": "40px"})
-        //     // .css({"font-size":"40"})
-        //     .print("center at 50vw", "middle at 40vh")
-        // ,
-        // newTimer("timer11", 300).start().wait()
-        // ,
-        // getText("w6")
-        //     .remove()
-        // ,
-
         // Blue background
         newFunction("BlueBackground", ()=>$("body").css("background-color", "rgba(173, 216, 230, 0.5)") ).call()
         ,
@@ -785,141 +529,6 @@ Template(
 ////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////  AUDIO TEST  /////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-
-
-// PennController("audiotest",
-//     newHtml("audiotest", "audiotest.html")
-//     ,
-//     getVar("RecordModeTrue")
-//         .test.is(1)
-//         .failure(
-//               newButton("ContinueButtonNoRecord", "Continue")
-//                   .print()
-//                   .wait()
-//         )
-//         .success(
-//             newButton("startrecording", "Start recording")
-//                 .print()
-//                 .wait()
-//             ,
-//             getButton("startrecording").remove()
-//             ,
-//             newImage("recordingicon", "recordingicon.png")
-//                 .center()
-//                 .size(50,50)
-//                 .print()
-//             ,
-//             // newText("emptySpace", "")  // empty vertical space
-//             // ,
-//             newButton("stoprecording", "End recording").print()
-//             ,
-//             newMediaRecorder("recorder"+"_"+id+"_"+"mictest", "audio").record()
-//             ,
-//             getButton("stoprecording")
-//                 .wait()
-//                 .remove()
-//             ,
-//             getImage("recordingicon").remove()
-//             ,
-//             newTimer("timer1", 300)
-//                 .start()
-//                 .wait()
-//             ,
-//             newImage("audioicon", "audioicon.png")
-//                 .center()
-//                 .size(50,50)
-//                 .print()
-//             ,
-//             getMediaRecorder("recorder"+"_"+id+"_"+"mictest")
-//                 .stop()
-//                 .disable()
-//                 .play()
-//                 .wait("playback")
-//             ,
-//             getImage("audioicon").remove()
-//             ,
-//             getMediaRecorder("recorder"+"_"+id+"_"+"mictest").stop()
-//             ,
-//             newTimer("timer2", 500)
-//                 .start()
-//                 .wait()
-//             ,
-//             newText("retryText", "<span style=\"color: green;\">If your microfone check was successful, please press \"Y\" on your keyboard to proceed.</span><br><br><span style=\"color: red;\">Otherwise, please ensure that your speakers and microfone are<br>switched on and press \"N\" on your keyboard to retry.</span>")
-//                 .cssContainer({"font-weight": "bold", "text-align":"center", "padding-top": "10px", "padding-bottom": "10px"})
-//                 .print()
-//             ,
-//             newKey("RetryKey", "YN")
-//                 .log()
-//                 .wait()
-//             ,
-//             getText("retryText").remove()
-//             ,
-//             getKey("RetryKey")
-//                 .test.pressed("Y")
-//                 .failure(
-//                     getButton("startrecording").print().wait(),
-//                     getButton("startrecording").remove(),
-//                     getImage("recordingicon").print(),
-//                     // getText("emptySpace").print(),
-//                     getButton("stoprecording").print(),
-//                     newMediaRecorder("recorder"+"_"+id+"_"+"mictest_attempt2", "audio").record(),
-//                     getButton("stoprecording").wait().remove(),
-//                     getImage("recordingicon").remove(),
-//                     newTimer("timer3", 300).start().wait(),
-//                     getImage("audioicon").print(),
-//                     getMediaRecorder("recorder"+"_"+id+"_"+"mictest_attempt2")
-//                         .stop()
-//                         .disable()
-//                         .play()
-//                         .wait("playback")
-//                     ,
-//                     getImage("audioicon").remove(),
-//                     getMediaRecorder("recorder"+"_"+id+"_"+"mictest_attempt2").stop(),
-//                     newTimer("timer4", 500).start().wait(),
-//                     newText("retryText2", "<span style=\"color: green;\">If the microfone test was successful this time and you heard your recording, please press \"Y\" on your keyboard to proceed.</span><br><br><span style=\"color: red;\">Otherwise, please ensure again that your speakers and microfone are turned on and press \"N\" on your keyboard for a final attempt.<\span>")
-//                          .cssContainer({"font-weight": "bold", "text-align":"center", "padding-top": "10px", "padding-bottom": "10px"})
-//                          .print()
-//                     ,
-//                     newKey("RetryKey2", "YN")
-//                         .log()
-//                         .wait()
-//                     ,
-//                     getText("retryText2").remove()
-//                     ,
-//                     getKey("RetryKey2")
-//                         .test.pressed("Y")
-//                         .failure(
-//                             getButton("startrecording").print().wait(),
-//                             getButton("startrecording").remove(),
-//                             getImage("recordingicon").print(),
-//                             // getText("emptySpace").print(),
-//                             getButton("stoprecording").print(),
-//                             newMediaRecorder("recorder"+"_"+id+"_"+"mictest_attempt3", "audio").record(),
-//                             getButton("stoprecording").wait().remove(),
-//                             getImage("recordingicon").remove(),
-//                             newTimer("timer5", 300).start().wait(),
-//                             getImage("audioicon").print(),
-//                             getMediaRecorder("recorder"+"_"+id+"_"+"mictest_attempt3")
-//                                 .stop()
-//                                 .disable()
-//                                 .play()
-//                                 .wait("playback")
-//                             ,
-//                             getImage("audioicon").remove(),
-//                             getMediaRecorder("recorder"+"_"+id+"_"+"mictest_attempt3").stop(),
-//                             newTimer("timer6", 500).start().wait(),
-//                             newText("retryText3", "<span style=\"color: green;\">If the microfone test was successful this time and you heard your recording, please press \"Continue\" below.<\span><br><br><span style=\"color: red;\">Otherwise please close the experiment as there seem to be non-solvable microfone and/or audio issues.<\span>")
-//                                 .cssContainer({"font-weight": "bold", "text-align":"center", "padding-top": "10px", "padding-bottom": "10px"})
-//                                 .print()
-//                             ,
-//                             newButton("Continue").print().wait()
-//                         )
-//                     )
-//         )
-// )
-// .log("TrialType", "Survey")
-
-
 
 newTrial("recording_test",
     newText("This experiment involves audio recording. Before you start the experiment, please test your recording.")
@@ -1312,20 +921,13 @@ Template("comprehension_l1_pseudorandomized.csv", row =>
                     getKey("ComprehensionKey")
                         .wait()
                         .log()
-                        // .test.pressed(row.Answer)
-                        // .success( getVar("ComprehensionAccuracyVar").set(v=>[...v,true]) )
-                        // .failure( getVar("ComprehensionAccuracyVar").set(v=>[...v,false]) )
                         .test.pressed(row.Answer)
                             .success(
-                                // newText("CorrectText", "Correct!").cssContainer({"font-family": "monospace", "font-size": "25px", "padding": "10px 10px 10px 10px", "color": "green",  "font-weight": "bold"}).print()
-                                // ,
                                 getVar("ComprehensionAccuracyVar").set(v=>[...v,true])
                                 ,
                                 getVar("CorrectAnswerVar").set( v => true )
                             )
                             .failure(
-                                // newText("IncorrectText", "Incorrect!").cssContainer({"font-family": "monospace", "font-size": "25px", "padding": "10px 10px 10px 10px", "color": "red",  "font-weight": "bold"}).print()
-                                // ,
                                 getVar("ComprehensionAccuracyVar").set(v=>[...v,false])
                                 ,
                                 getVar("CorrectAnswerVar").set( v => false )
@@ -1333,10 +935,6 @@ Template("comprehension_l1_pseudorandomized.csv", row =>
 
                     ,
                     getCanvas("ComprehensionCanvas").remove()
-                    // ,
-                    // getText("CorrectText").remove()
-                    // ,
-                    // getText("IncorrectText").remove()
                 )
         ,
         // Compute current accuracy (for debugging)
@@ -1464,35 +1062,9 @@ Template("production_l1_pseudorandomized.csv", row =>
                 getKey("StopRecordingKey")
                     .test.pressed()  // test if the key was pressed at all (not true if timer elapsed first)
                         .failure(
-                            // newText("ProductionTimeoutMessage", "<b>Reminder:</b><br><br>Finish the sentence and press <b>ENTER</b> to proceed.")
-                            //     .cssContainer({"color": "red", "font-weight": "bold"})
-                            //     .print()
-                            // ,
-                            // newVar("ProductionTime2").global().set( v => Date.now() )  // start timer
-                            // ,
-                            // Start another timer to limit the maximum time allowed for the second production attempt
-                            // newKey("StopRecordingKey2", "")
-                            //     .log()
-                            //     .callback(
-                            //         getTimer("ProductionTimeoutTimer2").stop()
-                            //     )
-                            // ,
-                            // newTimer("ProductionTimeoutTimer2", 10000)
-                            //     .start()
-                            //     .wait()
-                            // ,
-                            // getVar("ProductionTime2").set(v => Date.now() - v)
-                            // ,
-                            // getVar("ProductionTime").set(v => v + getVar("ProductionTime2").value) // Add the additional production time
-                            // ,
-                            // getKey("StopRecordingKey2")
-                            //     .test.pressed()
-                            //         .failure( getVar("ProductionTimeoutVar").set(v => "TimedOut" ) )
                             getVar("ProductionTimeoutVar").set(v => "TimedOut" )
                         )
                 ,
-                // getText("ProductionTimeoutMessage").remove()
-                // ,
                 // Append 1sec to each recording to capture cut-off ends
                 newTimer("RecordingSpilloverTimer", 1000)
                     .start()
