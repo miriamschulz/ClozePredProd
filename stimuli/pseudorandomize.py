@@ -33,8 +33,7 @@ import random
 
 
 def pseudorandomize(df, df_output,
-                    max_cond, max_type,
-                    max_q, max_response,
+                    constraints,
                     n=None,
                     max_depth=1000, recursion_depth=0):
     """
@@ -44,13 +43,9 @@ def pseudorandomize(df, df_output,
     Parameters:
     df (dataframe): The dataframe containing the items to be added.
     df_output (dataframe): The dataframe to which items should be appended.
-    max_cond (int): Maximum n of times the same condition can appear in a row.
-    max_type (int): Maximum n of times the same type (item vs. filler)
-                    can appear in a row.
-    max_q (int): Maximum n of times that an item with/without a comprehension
-                 question can appear in a row.
-    max_response (int): Maximum n of times the same answer for the comprehension
-                       questions can appear in a row.
+    constraints (dict): A dictionary containing the name of the column on which
+                        to apply a constraint as keys, and the constraint
+                        specifications as values.
     n (int): number of items to be added to df_output from df. Default: n=None,
              in which case the number of rows in the data frame will be used.
     max_depth (int): maximum number of attempts to start pseudorandomization
@@ -72,42 +67,37 @@ def pseudorandomize(df, df_output,
 
     while j < n:
 
-        # Get N recent conditions, types, questions and answers
-        prev_conds = df_target["ExpCondition"].tail(max_cond).tolist()
-        prev_types = df_target["Type"].tail(max_type).tolist()
-        prev_qs = df_target["HasQuestion"].tail(max_q).tolist()
-        prev_responses = df_target["Answer"].loc[~df_target["Answer"]\
-                         .eq("NoQ")].tail(max_response).tolist()
-
         # Subset the available items
         eligible = df_current.copy()
 
         # Subset conditions
-        if len(set(prev_conds)) == 1 and len(prev_conds) >= max_cond:
-            eligible = eligible[eligible["ExpCondition"] != prev_conds[0]]
-        # Subset types
-        if len(set(prev_types)) == 1 and len(prev_types) >= max_type:
-            eligible = eligible[eligible["Type"] != prev_types[0]]
-        # Subset questions
-        if len(set(prev_qs)) == 1 and len(prev_qs) >= max_q:
-            eligible = eligible[eligible["HasQuestion"] != prev_qs[0]]
-        # Subset responses
-        if len(set(prev_responses)) == 1 and len(prev_responses) >= max_response:
-            eligible = eligible[eligible["Answer"] != prev_responses[0]]
+        for property, max_val in constraints.items():
+
+            # Extract the last relevant values from the data frame and
+            # filter out any empty strings:
+            prev = df_target.loc[df_target[property].notna(), property]\
+                            .tail(max_val).tolist()
+
+            # Subset the set of eligible remaining items based on the above:
+            if len(set(prev)) == 1 and len(prev) >= max_val:
+                eligible = eligible[eligible[property] != prev[0]]
 
         # Restart if no eligible rows remain (or quit if limit reached)
         if eligible.empty:
             recursion_depth += 1
             if recursion_depth < max_depth:
-                print(f"No remaining rows. Starting from scratch. Round no: {recursion_depth + 1}", end="\r")
+                print(f"No remaining rows. Starting from scratch. Round no: \
+                {recursion_depth + 1}", end="\r")
                 return pseudorandomize(df, df_output,
-                                       max_cond, max_type, max_q, max_response,
+                                       constraints,
                                        n=n,
                                        max_depth=max_depth,
                                        recursion_depth=recursion_depth)
             else:
-                print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-                sys.exit("Exceeded maximum recursion depth without finding a solution. Exiting function.")
+                sys.exit(
+                    "\n\033[31mExceeded maximum recursion depth "
+                    "without finding a solution. Exiting function.\033[0m\n"
+                )
 
         # Shuffle the chosen items, but make reproducible with a random seed
         current_seed = random.randint(1, 1234) - 1
@@ -138,60 +128,59 @@ if __name__ == "__main__":
         sys.exit("Usage: python pseudorandomize.py <input files>")
 
     for f in file_names:
-        # Load the dataset
-        # df = pd.read_csv("test_data.csv")
-        # df = pd.read_csv("comprehension_l1.csv")
 
-        print("\n########################################")
-        print("# PROCESSING FILE {} #".format(f))
+        print("\nPROCESSING FILE: {}".format(f))
 
         df = pd.read_csv(f)
 
         # Replace the empty string in the HasQuestion and Answer columns
         # to avoid running into NA issues later:
-        df["HasQuestion"] = ["No" if pd.isna(x) else x for x in df["HasQuestion"]]
-        df["Answer"] = ["NoQ" if pd.isna(x) else x for x in df["Answer"]]
+        df["HasQuestion"] = ["No" if pd.isna(x) else x
+                             for x in df["HasQuestion"]]
 
         ### Step 1: Select a first filler with a question ###
 
-        question_fillers = df[(df["Type"].str.contains("Filler")) & (df["HasQuestion"] == "Yes")]
+        question_fillers = df[(df["Type"].str.contains("Filler")) &
+                              (df["HasQuestion"] == "Yes")]
         df_output = question_fillers.sample(1, random_state=42)
         df = df[~df["ItemNum"].isin(df_output["ItemNum"])]  # remove from df
 
 
         ### Step 2: Select two more fillers to start the block ###
 
-        # Define parameters
-        max_cond = 1  # different conditions each time from previous
-        max_type = 3  # irrelevant here but needs to be >= n
-        max_q = 2
-        max_response = 2
+        constraints = {"ExpCondition": 1, # different conditions each time
+                       "Type": 3, # irrelevant here but needs to be >= n here
+                       "HasQuestion": 2,
+                       "Answer": 2}
         n = 2
         max_depth = 5
 
         fillers = df[df["Type"].str.contains("Filler")]
 
         df_output = pseudorandomize(fillers, df_output,
-                                    max_cond, max_type, max_q, max_response,
+                                    constraints,
                                     n=n, max_depth=max_depth)
         df = df[~df["ItemNum"].isin(df_output["ItemNum"])]  # remove from df
 
 
         ### Step 3: Distribute the remaining items ###
 
-        max_cond = 2
-        max_type = 2
-        max_q = 3
-        max_response = 3
+        constraints = {"ExpCondition": 2,
+                       "Type": 2,
+                       "HasQuestion": 3,
+                       "Answer": 3}
         n = len(df)
         max_depth = 500
 
         df_output = pseudorandomize(df, df_output,
-                                    max_cond, max_type, max_q, max_response,
+                                    constraints,
                                     n=n, max_depth=max_depth)
         df = df[~df["ItemNum"].isin(df_output["ItemNum"])]  # remove from df
 
-        print("\nFinished processing file {}. Writing to file.".format(f))
+        print(
+              "\n\033[38;5;22mFinished processing file {}. "
+              "Writing to file.\033[0m".format(f)
+        )
 
         # Save to CSV
         out_filename = f.replace(".csv", "_pseudorandomized.csv")
