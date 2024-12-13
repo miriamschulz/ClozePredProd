@@ -26,14 +26,17 @@ python pseudorandomize.py comprehension_l1.csv comprehension_l2.csv
 '''
 
 
+import sys
 import pandas as pd
 import numpy as np
 import random
-import sys
 
 
-def pseudorandomize(df, df_output, n, timeout, max_cond, max_type,
-                    max_q, max_response, z=0):
+def pseudorandomize(df, df_output,
+                    max_cond, max_type,
+                    max_q, max_response,
+                    n=None,
+                    max_depth=1000, recursion_depth=0):
     """
     Recursive function that generates a pseudorandomized data frame
     according to diverse maximal repeptition criteria.
@@ -41,18 +44,19 @@ def pseudorandomize(df, df_output, n, timeout, max_cond, max_type,
     Parameters:
     df (dataframe): The dataframe containing the items to be added.
     df_output (dataframe): The dataframe to which items should be appended.
-    n (int): number of items to be added to df_output from df.
-    timeout (int): maximum number of attempts to start pseudorandomization
-                   from scratch (to avoid infinite loops)
-    max_cond (int): Maximum n of times the same condition can appear in a row
+    max_cond (int): Maximum n of times the same condition can appear in a row.
     max_type (int): Maximum n of times the same type (item vs. filler)
-                    can appear in a row
+                    can appear in a row.
     max_q (int): Maximum n of times that an item with/without a comprehension
-                 question can appear in a row
+                 question can appear in a row.
     max_response (int): Maximum n of times the same answer for the comprehension
-                       questions can appear in a row
-    z (int): counter for the number of function calls (since this is a
-             recursive function, should be initiated as 0)
+                       questions can appear in a row.
+    n (int): number of items to be added to df_output from df. Default: n=None,
+             in which case the number of rows in the data frame will be used.
+    max_depth (int): maximum number of attempts to start pseudorandomization
+                     from scratch (to avoid infinite loops).
+    recursion_depth (int): counter for the current number of recursive function
+                           calls (should always be initiated as 0).
 
     Returns:
     df_target (dataframe): The original df_output plus the newly added lines.
@@ -60,6 +64,9 @@ def pseudorandomize(df, df_output, n, timeout, max_cond, max_type,
 
     df_current = df.copy()
     df_target = df_output.copy()
+
+    if n is None:
+        n = len(df)
 
     j = 0
 
@@ -90,14 +97,17 @@ def pseudorandomize(df, df_output, n, timeout, max_cond, max_type,
 
         # Restart if no eligible rows remain (or quit if limit reached)
         if eligible.empty:
-            z += 1
-            if z < timeout:
-                print(f"No remaining rows. Starting from scratch. Round no: {z + 1}", end="\r")
-                return pseudorandomize(df, df_output, n, timeout, max_cond,
-                                       max_type, max_q, max_response, z=z)
+            recursion_depth += 1
+            if recursion_depth < max_depth:
+                print(f"No remaining rows. Starting from scratch. Round no: {recursion_depth + 1}", end="\r")
+                return pseudorandomize(df, df_output,
+                                       max_cond, max_type, max_q, max_response,
+                                       n=n,
+                                       max_depth=max_depth,
+                                       recursion_depth=recursion_depth)
             else:
                 print("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-                sys.exit("Reached max timeout. Exiting function.")
+                sys.exit("Exceeded maximum recursion depth without finding a solution. Exiting function.")
 
         # Shuffle the chosen items, but make reproducible with a random seed
         current_seed = random.randint(1, 1234) - 1
@@ -152,29 +162,33 @@ if __name__ == "__main__":
         ### Step 2: Select two more fillers to start the block ###
 
         # Define parameters
-        n = 2
-        timeout = 5
         max_cond = 1  # different conditions each time from previous
         max_type = 3  # irrelevant here but needs to be >= n
         max_q = 2
         max_response = 2
+        n = 2
+        max_depth = 5
 
         fillers = df[df["Type"].str.contains("Filler")]
 
-        df_output = pseudorandomize(fillers, df_output, n, timeout, max_cond, max_type, max_q, max_response)
+        df_output = pseudorandomize(fillers, df_output,
+                                    max_cond, max_type, max_q, max_response,
+                                    n=n, max_depth=max_depth)
         df = df[~df["ItemNum"].isin(df_output["ItemNum"])]  # remove from df
 
 
         ### Step 3: Distribute the remaining items ###
 
-        n = len(df)
-        timeout = 500
         max_cond = 2
         max_type = 2
         max_q = 3
         max_response = 3
+        n = len(df)
+        max_depth = 500
 
-        df_output = pseudorandomize(df, df_output, n, timeout, max_cond, max_type, max_q, max_response)
+        df_output = pseudorandomize(df, df_output,
+                                    max_cond, max_type, max_q, max_response,
+                                    n=n, max_depth=max_depth)
         df = df[~df["ItemNum"].isin(df_output["ItemNum"])]  # remove from df
 
         print("\nFinished processing file {}. Writing to file.".format(f))
