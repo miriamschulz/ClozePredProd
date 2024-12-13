@@ -8,15 +8,8 @@ This script takes a list of one or more files as input and creates a
 pseudo-random order over the rows in this file.
 The output is the pseudorandomized file.
 
-Current criteria for pseudorandomization:
-- Each file starts with 3 fillers (the first with a comprehension question).
-- No more than 2 experimental types (fillers vs. items) can occur in a row.
-- No more than 2 experimental conditions (e.g., High Expectancy items)
-  can occur in a row).
-- No more than 3 items in a row can have a comprehension question/no question.
-- No more than 3 consecutive questions (irrespective of the number of
-  intervening trials with no question in between) can have the same answer
-  (true/false).
+The criteria for pseudorandomization must be specified in a file
+named "pseudorandomization_constraints.txt" located in the same directory.
 
 USAGE:
 python pseudorandomize.py <input files>
@@ -27,9 +20,35 @@ python pseudorandomize.py comprehension_l1.csv comprehension_l2.csv
 
 
 import sys
+import os
 import pandas as pd
 import numpy as np
 import random
+
+
+def read_constraints(filename):
+    """
+    Function that reads in a file specifying the constraints for
+    pseudorandomization.
+    The must be a text file named pseudorandomization_constraints.txt
+    containing lines of the structure:
+    Constraint <constraintname> <max_n>
+    E.g.: Constraint Condition 2
+    """
+    if not os.path.isfile(filename):
+        raise FileNotFoundError(
+            f"\n\033[31mThe file '{filename}' needed to specify the "
+            "constraints does not exist in the current directory.\033[0m"
+        )
+
+    with open(filename, 'r') as file:
+        constraints = {}
+        for line in file:
+            line = line.strip().split()
+            if line[0] == "Constraint":
+                constraints[line[1]] = int(line[2])
+
+    return constraints
 
 
 def pseudorandomize(df, df_output,
@@ -127,6 +146,8 @@ if __name__ == "__main__":
     if not len(file_names) > 0:
         sys.exit("Usage: python pseudorandomize.py <input files>")
 
+    constraints = read_constraints("pseudorandomization_constraints.txt")
+
     for f in file_names:
 
         print("\nPROCESSING FILE: {}".format(f))
@@ -148,27 +169,25 @@ if __name__ == "__main__":
 
         ### Step 2: Select two more fillers to start the block ###
 
-        constraints = {"ExpCondition": 1, # different conditions each time
-                       "Type": 3, # irrelevant here but needs to be >= n here
-                       "HasQuestion": 2,
-                       "Answer": 2}
+        #TODO: adapt script to allow the start of a block
+        # with some fillers, and then the full pseudorandomization
+        constraints_start = {"ExpCondition": 1, # different conditions each time
+                             "Type": 3, # irrelevant here but needs to be >= n here
+                             "HasQuestion": 2,
+                             "Answer": 2}
         n = 2
         max_depth = 5
 
         fillers = df[df["Type"].str.contains("Filler")]
 
         df_output = pseudorandomize(fillers, df_output,
-                                    constraints,
+                                    constraints_start,
                                     n=n, max_depth=max_depth)
         df = df[~df["ItemNum"].isin(df_output["ItemNum"])]  # remove from df
 
 
         ### Step 3: Distribute the remaining items ###
 
-        constraints = {"ExpCondition": 2,
-                       "Type": 2,
-                       "HasQuestion": 3,
-                       "Answer": 3}
         n = len(df)
         max_depth = 500
 
