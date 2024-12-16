@@ -12,15 +12,12 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r load_libraries, message = FALSE}
 library(lme4)
 library(lmerTest)
 library(designr)
 library(dplyr)
 library(ggplot2)
-```
-
-```{r}
 rm(list = ls())
 ```
 
@@ -28,10 +25,6 @@ rm(list = ls())
 
 Power analysis for the Cloze Prediction & Production experiment.
 
-TODO: Currently the script only takes 1 fixed effect into account (Expectancy). Needs to be extended to include Task as well.
-
-
-# Data simulation
 
 ## Design
 
@@ -44,55 +37,68 @@ Predictor variables
 - Expectancy (high vs. low)
 - Task (Cloze production vs. reading comprehension only)
 
+TODO: The current script does not yet calculate the interaction between the two factors.
 
-## Creating the data set: predictors
 
-```{r}
+# A first simulation with exaggerated effects
+
+## Creating the data set
+
+```{r generate_first_dataset}
 set.seed(42)
 
-# within-subject, within-item factor, latin square design
 design <-
-  fixed.factor("Expectancy", levels=c("High", "Low")) + # fixed effect
-  #fixed.factor("Task", levels=c("Production", "Comprehension")) + # fixed effect
-  random.factor("Subj", instances=8) + # random effect (subjects)
-  random.factor("Item", instances=64)# + # random effect (items)
-  #random.factor(c("Subj", "Item"), groups=c("Expectancy", "Task"))
-dat <- design.codes(design) # create data frame (tibble) from experimental design
-length(unique(dat$Subj)) # number of subjects
+  fixed.factor("Expectancy", levels=c("High", "Low")) +
+  fixed.factor("Task", levels=c("Production", "Comprehension")) +
+  random.factor("Item", instances=20) +
+  random.factor("Subj", instances=10) +
+  random.factor(c("Subj", "Item"), groups=c("Expectancy", "Task"))
+dat <- dplyr::arrange(design.codes(design), Subj, Item)
 length(unique(dat$Item)) # number of items
+length(unique(dat$Subj)) # number of subjects
 
 # convert to factor
 dat <- dat %>% mutate(across(all_of(colnames(dat)), ~ as.factor(.)))
 
 # set contrasts
 contrasts(dat$Expectancy) <- c(-0.5, 0.5)
-#contrasts(dat$Task) <- c(-0.5, 0.5)
-
-# inspect
-str(dat)
+contrasts(dat$Task) <- c(-0.5, 0.5)
 ```
 
-## Simulating the response variable with simLMM()
+## Simulating the response variable
 
-```{r}
-fix <- c(250, 10)   # fixed effect: intercept = 250, difference between conditions = 10
-sd_Subj <- c(30, 10)
-sd_Item <- c(30, 10)
-sd_Res  <- 50 
-dat$RTsim <- simLMM(form = ~ 1 + Expectancy + (1 + Expectancy | Subj),
+Define the mean (intercept), effect size for each effect, and the random effects and residual variation, then use `simLMM()` to generate random data fulfilling these criteria as a response variable:
+
+```{r generate_first_RTs}
+fix <- c(250, 40, 20)   # Fixed effects: Intercept, Expectancy, Task
+sd_Subj <- c(20, 10, 10)
+sd_Item <- c(10, 10, 10)
+sd_Res  <- 50
+
+dat$RTsim <- simLMM(form = ~ 1 + Expectancy + Task +
+                      (1 + Expectancy + Task | Subj) + 
+                      (1 + Expectancy + Task | Item),
                    data   = dat,                     # data
                    Fixef  = fix,                     # fixed effects 
-                   VC_sd  = list(sd_Subj, sd_Res),   # random effects and noise (error) SD
+                   VC_sd  = list(sd_Subj, sd_Item, sd_Res),   # random effects and noise (error) SD
                    CP = 0.3,                         # correlation parameters of the random effects 
                    empirical = TRUE)
 ```
 
-```{r}
+Sanity check: Do the fixed effects in the data set correspond to the constraints defined above?
+(If `empirical = TRUE` is used above, this should correspond _exactly_ to the constaints.)
+
+```{r verify_group_means}
 dat %>% group_by(Expectancy) %>% summarize(M=mean(RTsim))
+dat %>% group_by(Task) %>% summarize(M=mean(RTsim))
 ```
 
-```{r}
-m <- lmer(RTsim ~ 1 + Expectancy + (1 + Expectancy | Subj),
+Run an LMM to verify that this in effect yields the right estimates:
+
+```{r first_model}
+m <- lmer(RTsim ~ 1 + Expectancy + Task +
+                      (1 + Expectancy + Task | Subj) + 
+                      (1 + Expectancy + Task | Item),
           data = dat, control=lmerControl(calc.derivs=FALSE))
 summary(m)
 ```
@@ -100,19 +106,28 @@ summary(m)
 
 # Power analysis
 
-Function to generate the data, varying the N of subjects and items:
+To simulate many data sets, write a function that generates a new data frame for a given number of items and subjects:
 
-```{r}
-sim_data <- function(n_subj, n_items) {
+TODO add the interaction term!
+
+```{r dataframe_generation_function}
+generate_dataframe <- function(n_subj, n_items) {
+  
+  # Generate Latin Square design
   design <-
-    fixed.factor("Expectancy", levels=c("High", "Low")) + # fixed effect
-    fixed.factor("Task", levels=c("Production", "Comprehension")) + # fixed effect
-    random.factor("Subj", instances=n_subj) + # random effect (subjects)
-    random.factor("Item", instances=n_items)# + # random effect (items)
-    #random.factor(c("Subj", "Item"), groups=c("Expectancy", "Task"))
-  dat <- design.codes(design) # create data frame (tibble) from experimental design
+    fixed.factor("Expectancy", levels=c("High", "Low")) +
+    fixed.factor("Task", levels=c("Production", "Comprehension")) +
+    random.factor("Item", instances=n_items/4) +
+    random.factor("Subj", instances=n_subj/4) +
+    random.factor(c("Subj", "Item"), groups=c("Expectancy", "Task"))
+  dat <- dplyr::arrange(design.codes(design), Subj, Item)
+  cat("Unique items:", length(unique(dat$Item)), sep = " ", end="\n")
+  cat("Unique subjects:", length(unique(dat$Subj)), sep = " ", end="\n")
 
-  # set contrasts
+  # Convert to factor
+  dat <- dat %>% mutate(across(all_of(colnames(dat)), ~ as.factor(.)))
+
+  # Set contrasts
   contrasts(dat$Expectancy) <- c(-0.5, 0.5)
   contrasts(dat$Task) <- c(-0.5, 0.5)
   
@@ -120,36 +135,52 @@ sim_data <- function(n_subj, n_items) {
 }
 ```
 
+Define a function for the power analysis:
 
-```{r}
-power_analysis <- function(dat, n_sim, n_subj, n_items) {
+```{r power_analysis_function}
+power_analysis <- function(dat, n_sim, fix, n_subj, n_items) {
+  
   for (i in 1:n_sim) {
+    
     print(paste0("Simulation number ", i, "/", n_sim))
-    dat <- sim_data(n_subj[i], n_items)
+    dat <- generate_dataframe(n_subj[i], n_items)
     nsj <- length(unique(dat$Subj))
-    # for each number of subjects, we run 10 simulations
-    # to obtain more stable results
+    
+    # For each number of subjects, run 10 simulations to obtain stable results
     for (j in 1:10) {
+      
+      # Simulate the response variable
       dat$RTsim <- simLMM(
-        form = ~ 1 + Expectancy + Task + (1 + Expectancy + Task | Subj) + (1 | Item),
-        data   = dat, # data
-        Fixef  = fix, # fixed effects
-        VC_sd  = list(sd_Subj, sd_Item, sd_Res), # random effects and noise (error) SD
-        CP = 0.3, # correlation parameters of the random effects
+        form = ~ 1 + Expectancy + Task +
+          (1 + Expectancy + Task | Subj) +
+          (1 + Expectancy + Task | Item),
+        data   = dat,
+        Fixef  = fix,
+        VC_sd  = list(sd_Subj, sd_Item, sd_Res),
+        CP = 0.3,
         empirical = FALSE, verbose = FALSE
       )
-      ww <- ""
+      
+      ww <- ""  # init
+      
+      # Run an LMM
       suppressMessages(
         suppressWarnings(LMM <- withCallingHandlers({
           lmer(
-            RTsim ~ 1 + Expectancy + Task + (1 + Expectancy + Task || Subj) + (1 | Item),
+            RTsim ~ 1 + Expectancy + Task +
+              # (1 + Expectancy + Task || Subj) +
+              # (1 + Expectancy + Task || Item),
+              (1 | Subj) +
+              (1 | Item),
             data = dat,
             REML = FALSE,
             control = lmerControl(calc.derivs = FALSE)
           )
-          },
-          warning = function(w) { ww <<- w$message }
+        },
+        warning = function(w) { ww <<- w$message }
       )))
+      
+      # Append the LMM estimates to the COF data frame
       # LMMcof <- c(coef(summary(LMM))[2, ])
       # COF <- rbind(COF, c(nsj, LMMcof, isSingular(LMM)))
       LMMcof <- coef(summary(LMM))
@@ -158,19 +189,21 @@ power_analysis <- function(dat, n_sim, n_subj, n_items) {
         c(nsj, LMMcof["Expectancy1", ], LMMcof["Task1", ], isSingular(LMM))
       )
       warn[i] <- ww
+      
     }
+    
   }
-  # return(c(COF, warn))
+  # return(c(COF, warn))  #TODO return also the warnings vector
   return(COF)
 }
 ```
 
+Set the fixed and random effects, and init:
 
-```{r}
+```{r set_effects_init}
 fix <- c(250, 8, 5)   # Fixed effects: Intercept, Expectancy, Task
 sd_Subj <- c(30, 10, 10)
-# sd_Item <- c(30, 10, 10)
-sd_Item <- 30
+sd_Item <- c(30, 10, 10)
 sd_Res  <- 50
 
 n_subj <- seq(8, 96, 8)
@@ -181,13 +214,17 @@ COF <- data.frame()
 warn <- c()
 ```
 
-```{r}
-power_output <- power_analysis(dat, n_sim, n_subj, n_items)
-COF <- power_output
+Run power analysis:
+
+```{r power_analysis}
+set.seed(666)
+COF <- power_analysis(dat, n_sim, fix, n_subj, n_items)
 #warn <- power_output[2]
 ```
 
-```{r}
+Plot results:
+
+```{r plot_power_analysis}
 # Results for LMMs
 names(COF) <- c("nsj",
                 "Estimate1", "SE1", "df1", "t1", "p1",
@@ -201,37 +238,44 @@ COF$sign2   <- as.numeric(COF$p2 < .05) # Significant results for Task
 COF$nsjF   <- gtools::quantcut(COF$nsj, q=seq(0,1,length=10))
 COF$nsjFL  <- plyr::ddply(COF,"nsjF",transform,nsjFL=mean(nsj))$nsjFL
 
-# Visualize results
-# p <- ggplot(data=COF)+
-#   geom_smooth(aes(x=nsj, y=sign1))+
-#   geom_point(   stat="summary", aes(x=nsjFL, y=sign1))+
-#   geom_errorbar(stat="summary", aes(x=nsjFL, y=sign1))+
-#   geom_line(    stat="summary", aes(x=nsjFL, y=sign1))
-# p
+# PLOT
+
+# Extract maximal y axis range to make the two plots comparable side by side
+y_range <- range(c(COF$sign1, COF$sign2), na.rm = TRUE)
 
 # Visualize results for Expectancy
 p1 <- ggplot(data = COF) +
-  geom_smooth(aes(x = nsj, y = sign1)) +
-  geom_point(stat = "summary", aes(x = nsjFL, y = sign1)) +
-  geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign1)) +
-  geom_line(stat = "summary", aes(x = nsjFL, y = sign1)) +
+  geom_smooth(aes(x = nsj, y = sign1), method="loess") +
+  geom_point(stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
+  geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
+  geom_line(stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
+  geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
+  geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
+  #ylim(y_range) +
   ggtitle("Power Analysis for Expectancy")
 
 # Visualize results for Task
 p2 <- ggplot(data = COF) +
-  geom_smooth(aes(x = nsj, y = sign2)) +
-  geom_point(stat = "summary", aes(x = nsjFL, y = sign2)) +
-  geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign2)) +
-  geom_line(stat = "summary", aes(x = nsjFL, y = sign2)) +
+  geom_smooth(aes(x = nsj, y = sign2), method="loess") +
+  geom_point(stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
+  geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
+  geom_line(stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
+  geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
+  geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
+  #ylim(y_range) +
   ggtitle("Power Analysis for Task")
 
-gridExtra::grid.arrange(p1, p2, nrow=1)
+p1 <- p1 + coord_cartesian(ylim = y_range)
+p2 <- p2 + coord_cartesian(ylim = y_range)
+
+suppressMessages({
+  gridExtra::grid.arrange(p1, p2, nrow = 1)
+})
 ```
 
+Determine the number of subjects needed for each effect to reach a power of 80%:
 
-```{r}
-# Determine number of subjects needed for a power of 80%
-
+```{r check_power_80%}
 # Expectancy:
 m0 <- loess(sign1 ~ nsj, data=COF)
 COF$pred <- predict(m0)
