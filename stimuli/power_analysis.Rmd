@@ -1,0 +1,247 @@
+---
+title: "Power analysis"
+author: "Miriam Schulz"
+date: "2024-12-13"
+output:
+  html_document:
+    number_sections: true
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(lme4)
+library(lmerTest)
+library(designr)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+rm(list = ls())
+```
+
+# About
+
+Power analysis for the Cloze Prediction & Production experiment.
+
+TODO: Currently the script only takes 1 fixed effect into account (Expectancy). Needs to be extended to include Task as well.
+
+
+# Data simulation
+
+## Design
+
+A 2 x 2 target manipulation design.
+
+Dependent variable: RTs.
+
+Predictor variables
+
+- Expectancy (high vs. low)
+- Task (Cloze production vs. reading comprehension only)
+
+
+## Creating the data set: predictors
+
+```{r}
+set.seed(42)
+
+# within-subject, within-item factor, latin square design
+design <-
+  fixed.factor("Expectancy", levels=c("High", "Low")) + # fixed effect
+  #fixed.factor("Task", levels=c("Production", "Comprehension")) + # fixed effect
+  random.factor("Subj", instances=8) + # random effect (subjects)
+  random.factor("Item", instances=64)# + # random effect (items)
+  #random.factor(c("Subj", "Item"), groups=c("Expectancy", "Task"))
+dat <- design.codes(design) # create data frame (tibble) from experimental design
+length(unique(dat$Subj)) # number of subjects
+length(unique(dat$Item)) # number of items
+
+# convert to factor
+dat <- dat %>% mutate(across(all_of(colnames(dat)), ~ as.factor(.)))
+
+# set contrasts
+contrasts(dat$Expectancy) <- c(-0.5, 0.5)
+#contrasts(dat$Task) <- c(-0.5, 0.5)
+
+# inspect
+str(dat)
+```
+
+## Simulating the response variable with simLMM()
+
+```{r}
+fix <- c(250, 10)   # fixed effect: intercept = 250, difference between conditions = 10
+sd_Subj <- c(30, 10)
+sd_Item <- c(30, 10)
+sd_Res  <- 50 
+dat$RTsim <- simLMM(form = ~ 1 + Expectancy + (1 + Expectancy | Subj),
+                   data   = dat,                     # data
+                   Fixef  = fix,                     # fixed effects 
+                   VC_sd  = list(sd_Subj, sd_Res),   # random effects and noise (error) SD
+                   CP = 0.3,                         # correlation parameters of the random effects 
+                   empirical = TRUE)
+```
+
+```{r}
+dat %>% group_by(Expectancy) %>% summarize(M=mean(RTsim))
+```
+
+```{r}
+m <- lmer(RTsim ~ 1 + Expectancy + (1 + Expectancy | Subj),
+          data = dat, control=lmerControl(calc.derivs=FALSE))
+summary(m)
+```
+
+
+# Power analysis
+
+Function to generate the data, varying the N of subjects and items:
+
+```{r}
+sim_data <- function(n_subj, n_items) {
+  design <-
+    fixed.factor("Expectancy", levels=c("High", "Low")) + # fixed effect
+    fixed.factor("Task", levels=c("Production", "Comprehension")) + # fixed effect
+    random.factor("Subj", instances=n_subj) + # random effect (subjects)
+    random.factor("Item", instances=n_items)# + # random effect (items)
+    #random.factor(c("Subj", "Item"), groups=c("Expectancy", "Task"))
+  dat <- design.codes(design) # create data frame (tibble) from experimental design
+
+  # set contrasts
+  contrasts(dat$Expectancy) <- c(-0.5, 0.5)
+  contrasts(dat$Task) <- c(-0.5, 0.5)
+  
+  return(dat)
+}
+```
+
+
+```{r}
+power_analysis <- function(dat, n_sim, n_subj, n_items) {
+  for (i in 1:n_sim) {
+    print(paste0("Simulation number ", i, "/", n_sim))
+    dat <- sim_data(n_subj[i], n_items)
+    nsj <- length(unique(dat$Subj))
+    # for each number of subjects, we run 10 simulations
+    # to obtain more stable results
+    for (j in 1:10) {
+      dat$RTsim <- simLMM(
+        form = ~ 1 + Expectancy + Task + (1 + Expectancy + Task | Subj) + (1 | Item),
+        data   = dat, # data
+        Fixef  = fix, # fixed effects
+        VC_sd  = list(sd_Subj, sd_Item, sd_Res), # random effects and noise (error) SD
+        CP = 0.3, # correlation parameters of the random effects
+        empirical = FALSE, verbose = FALSE
+      )
+      ww <- ""
+      suppressMessages(
+        suppressWarnings(LMM <- withCallingHandlers({
+          lmer(
+            RTsim ~ 1 + Expectancy + Task + (1 + Expectancy + Task || Subj) + (1 | Item),
+            data = dat,
+            REML = FALSE,
+            control = lmerControl(calc.derivs = FALSE)
+          )
+          },
+          warning = function(w) { ww <<- w$message }
+      )))
+      # LMMcof <- c(coef(summary(LMM))[2, ])
+      # COF <- rbind(COF, c(nsj, LMMcof, isSingular(LMM)))
+      LMMcof <- coef(summary(LMM))
+      COF <- rbind(
+        COF, 
+        c(nsj, LMMcof["Expectancy1", ], LMMcof["Task1", ], isSingular(LMM))
+      )
+      warn[i] <- ww
+    }
+  }
+  # return(c(COF, warn))
+  return(COF)
+}
+```
+
+
+```{r}
+fix <- c(250, 8, 5)   # Fixed effects: Intercept, Expectancy, Task
+sd_Subj <- c(30, 10, 10)
+# sd_Item <- c(30, 10, 10)
+sd_Item <- 30
+sd_Res  <- 50
+
+n_subj <- seq(8, 96, 8)
+n_items <- 80
+n_sim <- length(n_subj)
+
+COF <- data.frame()
+warn <- c()
+```
+
+```{r}
+power_output <- power_analysis(dat, n_sim, n_subj, n_items)
+COF <- power_output
+#warn <- power_output[2]
+```
+
+```{r}
+# Results for LMMs
+names(COF) <- c("nsj",
+                "Estimate1", "SE1", "df1", "t1", "p1",
+                "Estimate2", "SE2", "df2", "t2", "p2", 
+                "singular")
+#COF$warning <- warn
+#COF$noWarning <- warn==""
+COF$sign1   <- as.numeric(COF$p1 < .05) # determine significant results; one-tailed
+COF$sign2   <- as.numeric(COF$p2 < .05) # Significant results for Task
+
+COF$nsjF   <- gtools::quantcut(COF$nsj, q=seq(0,1,length=10))
+COF$nsjFL  <- plyr::ddply(COF,"nsjF",transform,nsjFL=mean(nsj))$nsjFL
+
+# Visualize results
+# p <- ggplot(data=COF)+
+#   geom_smooth(aes(x=nsj, y=sign1))+
+#   geom_point(   stat="summary", aes(x=nsjFL, y=sign1))+
+#   geom_errorbar(stat="summary", aes(x=nsjFL, y=sign1))+
+#   geom_line(    stat="summary", aes(x=nsjFL, y=sign1))
+# p
+
+# Visualize results for Expectancy
+p1 <- ggplot(data = COF) +
+  geom_smooth(aes(x = nsj, y = sign1)) +
+  geom_point(stat = "summary", aes(x = nsjFL, y = sign1)) +
+  geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign1)) +
+  geom_line(stat = "summary", aes(x = nsjFL, y = sign1)) +
+  ggtitle("Power Analysis for Expectancy")
+
+# Visualize results for Task
+p2 <- ggplot(data = COF) +
+  geom_smooth(aes(x = nsj, y = sign2)) +
+  geom_point(stat = "summary", aes(x = nsjFL, y = sign2)) +
+  geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign2)) +
+  geom_line(stat = "summary", aes(x = nsjFL, y = sign2)) +
+  ggtitle("Power Analysis for Task")
+
+gridExtra::grid.arrange(p1, p2, nrow=1)
+```
+
+
+```{r}
+# Determine number of subjects needed for a power of 80%
+
+# Expectancy:
+m0 <- loess(sign1 ~ nsj, data=COF)
+COF$pred <- predict(m0)
+idx <- COF$pred>0.8
+min(COF$nsj[idx])
+
+# Task:
+m0 <- loess(sign2 ~ nsj, data=COF)
+COF$pred <- predict(m0)
+idx <- COF$pred>0.8
+min(COF$nsj[idx])
+```
+
