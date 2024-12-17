@@ -10,6 +10,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width = 16)
 ```
 
 ```{r load_libraries, message = FALSE}
@@ -37,7 +38,7 @@ Predictor variables
 - Expectancy (high vs. low)
 - Task (Cloze production vs. reading comprehension only)
 
-TODO: The current script does not yet calculate the interaction between the two factors.
+TODO: add more detailed description of how to use the script.
 
 
 # A first simulation with exaggerated effects
@@ -70,12 +71,16 @@ contrasts(dat$Task) <- c(-0.5, 0.5)
 Define the mean (intercept), effect size for each effect, and the random effects and residual variation, then use `simLMM()` to generate random data fulfilling these criteria as a response variable:
 
 ```{r generate_first_RTs}
-fix <- c(250, 40, 20)   # Fixed effects: Intercept, Expectancy, Task
+# Specify fixed effects coefficients for:
+# Intercept, Expectancy, Task, Exp:Task Interaction
+fix <- c(250, 40, 20, 10)
+
+# Specify random effects + res variance
 sd_Subj <- c(20, 10, 10)
 sd_Item <- c(10, 10, 10)
 sd_Res  <- 50
 
-dat$RTsim <- simLMM(form = ~ 1 + Expectancy + Task +
+dat$RTsim <- simLMM(form = ~ 1 + Expectancy * Task +
                       (1 + Expectancy + Task | Subj) + 
                       (1 + Expectancy + Task | Item),
                    data   = dat,                     # data
@@ -95,14 +100,20 @@ dat %>% group_by(Task) %>% summarize(M=mean(RTsim))
 
 Run an LMM to verify that this in effect yields the right estimates:
 
-```{r first_model}
-m <- lmer(RTsim ~ 1 + Expectancy + Task +
-                      (1 + Expectancy + Task | Subj) + 
-                      (1 + Expectancy + Task | Item),
+```{r first_model, eval=FALSE}
+# Interaction model
+m_interaction <- lmer(RTsim ~ 1 + Expectancy * Task +
+                      (1 + Expectancy + Task || Subj) +
+                      (1 + Expectancy + Task || Item),
           data = dat, control=lmerControl(calc.derivs=FALSE))
-summary(m)
+
+save(m_interaction, file="model_test.rda")
 ```
 
+```{r}
+load(file="model_test.rda")
+summary(m_interaction)
+```
 
 # Power analysis
 
@@ -110,8 +121,6 @@ summary(m)
 ## Run power analysis
 
 To simulate many data sets, write a function that generates a new data frame for a given number of items and subjects:
-
-TODO add the interaction term!
 
 ```{r dataframe_generation_function}
 generate_dataframe <- function(n_subj, n_items) {
@@ -140,7 +149,8 @@ Define a function for the power analysis:
 
 ```{r power_analysis_function}
 power_analysis <- function(dat,
-                           mean_rt, expectancy_fixed, task_fixed,
+                           mean_rt,
+                           expectancy_fixed, task_fixed, interaction_fixed,
                            n_subj, n_items,
                            verbose=FALSE) {
   
@@ -165,21 +175,23 @@ power_analysis <- function(dat,
         # Extract the fixed effects for both factors
         exp <- expectancy_fixed[e]
         task <- task_fixed[e]
+        interact <- interaction_fixed[e]
         
         if (verbose == TRUE) {
-          cat("      Expectancy:", exp, " Task:", task,
+          cat("      Expectancy:", exp,
+              "- Task:", task,
+              "- Interaction:", interact,
               sep=" ", end="\n")
         }
 
-        fix <- c(mean_rt, exp, task)
+        fix <- c(mean_rt, exp, task, interact)
 
         # For each iteration, run several simulations for more stable results
-        # for (j in 1:10) {
-        for (j in 1:5) {  #TODO set to 10 for final simulations
-          
+        for (j in 1:10) {
+
           # Simulate the response variable
           dat$RTsim <- simLMM(
-            form = ~ 1 + Expectancy + Task +
+            form = ~ 1 + Expectancy * Task +
               (1 + Expectancy + Task | Subj) +
               (1 + Expectancy + Task | Item),
             data   = dat,
@@ -190,13 +202,13 @@ power_analysis <- function(dat,
             verbose = FALSE
           )
           
-          ww <- ""  # init
+          #ww <- ""  # init
           
           # Run an LMM
           suppressMessages(
             suppressWarnings(LMM <- withCallingHandlers({
               lmer(
-                RTsim ~ 1 + Expectancy + Task +
+                RTsim ~ 1 + Expectancy * Task +
                   # (1 + Expectancy + Task || Subj) +
                   # (1 + Expectancy + Task || Item),
                   (1 | Subj) +
@@ -205,39 +217,30 @@ power_analysis <- function(dat,
                 REML = FALSE,
                 control = lmerControl(calc.derivs = FALSE)
               )
-            },
-            warning = function(w) { ww <<- w$message }
+            }#,
+            #warning = function(w) { ww <<- w$message }
           )))
           
           # Append the LMM estimates to the COF data frame
-          # LMMcof <- c(coef(summary(LMM))[2, ])
-          # COF <- rbind(COF, c(nsj, LMMcof, isSingular(LMM)))
           LMMcof <- coef(summary(LMM))
           COF <- rbind(
             COF, 
-            c(nsj,
-              nit,
-              exp,
-              task,
-              LMMcof["Expectancy1", ],
-              LMMcof["Task1", ],
+            c(nsj, nit, exp, task, interact,
+              LMMcof["Expectancy1", ], LMMcof["Task1", ],
+              LMMcof["Expectancy1:Task1", ],
               isSingular(LMM))
           )
-          warn[i] <- ww
-        
+          #warn[s] <- ww
         }
-        
       }
-      
     }
-    
   }
-  # return(c(COF, warn))  #TODO return also the warnings vector
+  #COF$warning <- warn
   return(COF)
 }
 ```
 
-Set the fixed and random effects, and iniialize:
+Set the fixed and random effects, and initialize:
 
 ```{r set_effects_init}
 # fix <- c(250, 8, 5)   # Fixed effects: Intercept, Expectancy, Task
@@ -246,8 +249,13 @@ Set the fixed and random effects, and iniialize:
 mean_rt <- 250  # intercept
 
 # Define fixed effects for Expectancy and Task (vectors of same length)
-expectancy_fixed <- c(5, 8, 10)  # different simulation values for expectancy
-task_fixed <- c(5, 8, 10)  # different simulation values for task
+# and their interaction.
+# Note that these vectorsmust be the SAME length, but one can vary 
+# which fixed effect to test by keeping the values in the vectors for the other
+# effects constant, e.g., task_fixed <- c(5, 5, 5).
+expectancy_fixed <- c(10, 10, 10)  # simulation values for expectancy
+task_fixed <- c(5, 5, 5)  # simulation values for task
+interaction_fixed <- c(0, 5, 10)  # simulation values for exp:task interaction
 
 # Define random effects and variance
 sd_Subj <- c(30, 10, 10)
@@ -255,11 +263,13 @@ sd_Item <- c(30, 10, 10)
 sd_Res  <- 50
 
 # Define vectors for the number of subjects and items to simulate
+# n_subj <- seq(8, 96, 8)
+# n_items <- seq(80, 96, 8)
 n_subj <- seq(8, 96, 8)
-n_items <- seq(80, 96, 8)
+n_items <- seq(80, 96, 16)
 
 COF <- data.frame()
-warn <- c()
+#warn <- c()
 ```
 
 Run power analysis:
@@ -268,9 +278,10 @@ Run power analysis:
 # set.seed(666)
 set.seed(42)
 COF <- power_analysis(dat,
-                      mean_rt, expectancy_fixed, task_fixed,
+                      mean_rt,
+                      expectancy_fixed, task_fixed, interaction_fixed,
                       n_subj, n_items,
-                      verbose = FALSE)
+                      verbose = TRUE)
 #warn <- power_output[2]
 ```
 
@@ -278,19 +289,21 @@ Format power analysis data frame:
 
 ```{r format_power_df}
 # Results for LMMs
-names(COF) <- c("nsj", "nit", "exp", "task",
+names(COF) <- c("nsj", "nit", "exp", "task", "interact",
                 "Expectancy", "SE1", "df1", "t1", "p1",
                 "Task", "SE2", "df2", "t2", "p2", 
+                "Interaction", "SE3", "df3", "t3", "p3", 
                 "singular")
 #COF$warning <- warn
 #COF$noWarning <- warn==""
 COF$sign1   <- as.numeric(COF$p1 < .05) # determine significant results; one-tailed
 COF$sign2   <- as.numeric(COF$p2 < .05) # Significant results for Task
+COF$sign3   <- as.numeric(COF$p3 < .05) # Significant results for Task
 
 COF$nsjF   <- gtools::quantcut(COF$nsj, q=seq(0,1,length=10))
 COF$nsjFL  <- plyr::ddply(COF,"nsjF",transform,nsjFL=mean(nsj))$nsjFL
 
-#save(COF, file="Power.rda")
+#save(COF, file="power.rda")
 ```
 
 
@@ -307,41 +320,75 @@ y_range <- range(c(COF$sign1, COF$sign2), na.rm = TRUE)
 # Plot only the maximal fixed effects here
 COF_large_effects <- filter(COF, exp == max(exp))
 COF_large_effects <- filter(COF, task == max(task))
+COF_large_effects <- filter(COF, interact == max(interact))
 
-# Visualize results for Expectancy
-p1 <- ggplot(data = COF_large_effects) +
-  geom_smooth(aes(x = nsj, y = sign1), method="loess") +
-  geom_point(   stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
-  geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
-  geom_line(    stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
-  geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
-  geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
-  ggtitle("Power for Expectancy") + 
-  theme_minimal()
+power_plot <- function(dat, sign, y_range, plt_title) {
+  p <- ggplot(data = dat) +
+    geom_smooth(aes(x = nsj, y = eval(parse(text=sign))), method="loess") +
+    geom_point(   stat = "summary", aes(x = nsjFL, y = eval(parse(text=sign))),
+                  fun.data = mean_se) +
+    geom_errorbar(stat = "summary", aes(x = nsjFL, y = eval(parse(text=sign))),
+                  fun.data = mean_se) +
+    geom_line(    stat = "summary", aes(x = nsjFL, y = eval(parse(text=sign))),
+                  fun.data = mean_se) +
+    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
+    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
+    ggtitle(plt_title) + 
+    theme_minimal()
+  p <- p + coord_cartesian(ylim = y_range)
+  return(p)
+}
 
-# Visualize results for Task
-p2 <- ggplot(data = COF_large_effects) +
-  geom_smooth(aes(x = nsj, y = sign2), method="loess") +
-  geom_point(   stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
-  geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
-  geom_line(    stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
-  geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
-  geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
-  ggtitle("Power for Task") +
-  theme_minimal()
+p1 <- power_plot(COF_large_effects, "sign1", y_range, "Power for Expectancy")
+p2 <- power_plot(COF_large_effects, "sign2", y_range, "Power for Task")
+p3 <- power_plot(COF_large_effects, "sign3", y_range, "Power for the Interaction")
 
-p1 <- p1 + coord_cartesian(ylim = y_range)
-p2 <- p2 + coord_cartesian(ylim = y_range)
+# # Visualize results for Expectancy
+# p1 <- ggplot(data = COF_large_effects) +
+#   geom_smooth(aes(x = nsj, y = sign1), method="loess") +
+#   geom_point(   stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
+#   geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
+#   geom_line(    stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
+#   geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
+#   geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
+#   ggtitle("Power for Expectancy") +
+#   theme_minimal()
+# 
+# # Visualize results for Task
+# p2 <- ggplot(data = COF_large_effects) +
+#   geom_smooth(aes(x = nsj, y = sign2), method="loess") +
+#   geom_point(   stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
+#   geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
+#   geom_line(    stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
+#   geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
+#   geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
+#   ggtitle("Power for Task") +
+#   theme_minimal()
+# 
+# # Visualize results for the Expectancy:Task interaction
+# p3 <- ggplot(data = COF_large_effects) +
+#   geom_smooth(aes(x = nsj, y = sign3), method="loess") +
+#   geom_point(   stat = "summary", aes(x = nsjFL, y = sign3), fun.data = mean_se) +
+#   geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign3), fun.data = mean_se) +
+#   geom_line(    stat = "summary", aes(x = nsjFL, y = sign3), fun.data = mean_se) +
+#   geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
+#   geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
+#   ggtitle("Power for the Interaction") +
+#   theme_minimal()
+# 
+# p1 <- p1 + coord_cartesian(ylim = y_range)
+# p2 <- p2 + coord_cartesian(ylim = y_range)
+# p3 <- p3 + coord_cartesian(ylim = y_range)
 
 suppressMessages({
-  gridExtra::grid.arrange(p1, p2, nrow = 1)
+  gridExtra::grid.arrange(p1, p2, p3, nrow = 1)
 })
 ```
 
 
-### Power by number of subjects and items
+### Power by number of items
 
-Plot by number of subjects and items:
+Plot by number of subjects + items:
 
 ```{r plot_items}
 p1 <- ggplot(data=COF_large_effects) +
@@ -365,19 +412,31 @@ p2 <- ggplot(data=COF_large_effects) +
   geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
   ggtitle("Power for Task") + 
   theme_minimal()
+  
+p3 <- ggplot(data=COF_large_effects) +
+  geom_smooth(aes(x=nsj, y=sign3, colour=factor(nit), fill=factor(nit)),
+              method="loess", se=FALSE)+
+  geom_point(   stat="summary", aes(x=nsjFL, y=sign3, colour=factor(nit)))+
+  geom_errorbar(stat="summary", aes(x=nsjFL, y=sign3, colour=factor(nit)))+
+  geom_line(    stat="summary", aes(x=nsjFL, y=sign3, colour=factor(nit)))+
+  geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
+  geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
+  ggtitle("Power for the Interaction") + 
+  theme_minimal()
 
 p1 <- p1 + coord_cartesian(ylim = y_range)
 p2 <- p2 + coord_cartesian(ylim = y_range)
+p3 <- p3 + coord_cartesian(ylim = y_range)
 
 suppressMessages({
-  gridExtra::grid.arrange(p1, p2, nrow = 1)
+  gridExtra::grid.arrange(p1, p2, p3, nrow = 1)
 })
 ```
 
 
 ### Power by effect size
 
-Plot by effect size (only the max number of items):
+Plot by number of subjects + effect size (only the max number of items):
 
 ```{r plot_effect_sizes}
 COF_max_items <- filter(COF, nit == max(nit))
@@ -404,11 +463,23 @@ p2 <- ggplot(data=COF_max_items) +
   ggtitle("Power for Task") + 
   theme_minimal()
 
+p3 <- ggplot(data=COF_max_items) +
+  geom_smooth(aes(x=nsj, y=sign3, color=factor(interact), fill=factor(interact)),
+              method="loess", se=TRUE)+
+  geom_point(   stat="summary", aes(x=nsjFL, y=sign3, colour=factor(interact)))+
+  geom_errorbar(stat="summary", aes(x=nsjFL, y=sign3, colour=factor(interact)))+
+  geom_line(    stat="summary", aes(x=nsjFL, y=sign3, colour=factor(interact)))+
+  geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
+  geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
+  ggtitle("Power for the Interaction") + 
+  theme_minimal()
+
 p1 <- p1 + coord_cartesian(ylim = y_range)
 p2 <- p2 + coord_cartesian(ylim = y_range)
+p3 <- p3 + coord_cartesian(ylim = y_range)
 
 suppressMessages({
-  gridExtra::grid.arrange(p1, p2, nrow = 1)
+  gridExtra::grid.arrange(p1, p2, p3, nrow = 1)
 })
 ```
 
@@ -423,9 +494,11 @@ for (e in 1:length(expectancy_fixed)) {
   
   exp_current <- expectancy_fixed[e]
   task_current <- task_fixed[e]
+  interact_current <- interaction_fixed[e]
   
   COF_current <- filter(COF, exp==exp_current)
   COF_current <- filter(COF_current, task==task_current)
+  COF_current <- filter(COF_current, interact==interact_current)
   
   # Expectancy:
   m0 <- loess(sign1 ~ nsj, data=COF_current)
@@ -433,7 +506,8 @@ for (e in 1:length(expectancy_fixed)) {
   idx <- COF$pred>0.8
   min_exp <- min(COF$nsj[idx])
   
-  cat("Expectancy effect size:", exp_current, "-> min required subjects:",
+  cat("Expectancy effect size:", exp_current,
+      " -> min required subjects:",
       min_exp, sep=" ", end="\n")
 
   # Task:
@@ -442,8 +516,19 @@ for (e in 1:length(expectancy_fixed)) {
   idx <- COF$pred>0.8
   min_task <- min(COF$nsj[idx])
   
-  cat("Task effect size:", task_current, "      -> min required subjects:",
-      min_task, sep=" ", end="\n\n")
+  cat("Task effect size:", task_current,
+      "        -> min required subjects:",
+      min_task, sep=" ", end="\n")
+  
+  # Interaction:
+  m0 <- loess(sign3 ~ nsj, data=COF_current)
+  COF$pred <- predict(m0)
+  idx <- COF$pred>0.8
+  min_interact <- ifelse(length(COF$nsj[idx]) > 0, min(COF$nsj[idx]), FALSE)
+  
+  cat("Interaction effect size:", interact_current,
+      "-> min required subjects:",
+      min_interact, sep=" ", end="\n\n")
 }
 
 ```
