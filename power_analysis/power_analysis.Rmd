@@ -4,6 +4,7 @@ author: "Miriam Schulz"
 date: "2024-12-13"
 output:
   html_document:
+    code_folding: hide
     number_sections: true
     toc: true
 ---
@@ -236,7 +237,7 @@ power_analysis <- function(dat,
         }
       }
     }
-    beepr::beep()  # beep once every current batch of subjects is finished
+    beepr::beep()  # beep once the current batch of subjects is finished
   }
   #COF$warning <- warn
   return(COF)
@@ -246,8 +247,6 @@ power_analysis <- function(dat,
 Set the fixed and random effects, and initialize:
 
 ```{r set_effects_init}
-# fix <- c(250, 8, 5)   # Fixed effects: Intercept, Expectancy, Task
-
 # Define a mean RT (intercept)
 mean_rt <- 250  # intercept
 
@@ -273,7 +272,7 @@ COF <- data.frame()
 #warn <- c()
 ```
 
-Run power analysis:
+Run power analysis and format power analysis data frame:
 
 ```{r power_analysis, eval=FALSE}
 # set.seed(666)
@@ -284,11 +283,7 @@ COF <- power_analysis(dat,
                       n_subj, n_items,
                       verbose = FALSE)
 #warn <- power_output[2]
-```
 
-Format power analysis data frame:
-
-```{r format_power_df, eval=FALSE}
 # Results for LMMs
 names(COF) <- c("nsj", "nit", "exp", "task", "interact",
                 "Expectancy", "SE1", "df1", "t1", "p1",
@@ -304,15 +299,11 @@ COF$sign3   <- as.numeric(COF$p3 < .05) # Significant results for Task
 COF$nsjF   <- gtools::quantcut(COF$nsj, q=seq(0,1,length=10))
 COF$nsjFL  <- plyr::ddply(COF,"nsjF",transform,nsjFL=mean(nsj))$nsjFL
 
-#save(COF, file="power.rda")
+save(COF, file="power.rda")
 ```
 
 
 ## Plot power results
-
-### Power by number of subjects
-
-Plot results by number of subjects (averaging over the simulations by N items):
 
 ```{r}
 load(file="power.rda")
@@ -335,7 +326,9 @@ COF_small_effects <- COF %>%
 ```
 
 
-```{r plot_subjects}
+### Power by N of subjects
+
+```{r plot_subjects_function}
 power_plots_subjects <- function(dat) {
   
   # Extract maximal y axis range to make the two plots comparable side by side
@@ -383,22 +376,28 @@ power_plots_subjects <- function(dat) {
   })
   
 }
+```
 
+Plot for the maximal number of items:
+
+```{r plot_subjects_max}
 # Plot for the maximal effects + max n of items
 COF_subjects <- filter(COF_large_effects, nit == max(nit))
 power_plots_subjects(COF_subjects)
+```
 
+Plot for the minimal number of items:
+
+```{r plot_subjects_min}
 # Plot for the smallest effects + max n of items
 COF_subjects <- filter(COF_small_effects, nit == max(nit))
 power_plots_subjects(COF_subjects)
 ```
 
 
-### Power by number of items
+### Power by N of subjects & N of items
 
-Plot by number of subjects + items:
-
-```{r plot_items}
+```{r plot_items_function}
 power_plots_items <- function(dat) {
   
   # Extract maximal y axis range to make the two plots comparable side by side
@@ -445,20 +444,25 @@ power_plots_items <- function(dat) {
     gridExtra::grid.arrange(p1, p2, p3, nrow = 1)
   })
 }
+```
 
-# Plot for the maximal effects
+Plot for the maximal effects:
+
+```{r plot_items_max}
 power_plots_items(COF_large_effects)
+```
 
-# Plot for the smallest effects
+Plot for the smallest effects:
+
+```{r plot_items_min}
 power_plots_items(COF_small_effects)
 ```
 
 
-### Power by effect size
+### Power by N of subjects & effect size
 
-Plot by number of subjects + effect size (only the max number of items):
 
-```{r plot_effect_sizes}
+```{r plot_effect_sizes_function}
 power_plots_effects <- function(dat) {
   
   # Extract maximal y axis range to make the two plots comparable side by side
@@ -505,12 +509,18 @@ power_plots_effects <- function(dat) {
     gridExtra::grid.arrange(p1, p2, p3, nrow = 1)
   })
 }
+```
 
-# Plot for max n of items
+Plot for the maximal number of items:
+
+```{r plot_effect_sizes_max}
 COF_max_items <- filter(COF, nit == max(nit))
 power_plots_effects(COF_max_items)
+```
 
-# Plot for min n of items
+Plot for the minimal number of items:
+
+```{r plot_effect_sizes_min}
 COF_min_items <- filter(COF, nit == min(nit))
 power_plots_effects(COF_min_items)
 ```
@@ -520,7 +530,7 @@ power_plots_effects(COF_min_items)
 
 Determine the number of subjects needed for each effect to reach a power of 80%:
 
-```{r}
+```{r power_threshold_function}
 power_threshold <- function(effect_name, effect_vector, sign) {
   for (i in 1:length(effect_vector)) {
     current <- effect_vector[i]
@@ -538,7 +548,7 @@ power_threshold <- function(effect_name, effect_vector, sign) {
 }
 ```
 
-```{r}
+```{r calculate_80_power}
 print("Expectancy:")
 power_threshold("exp", expectancy_fixed, "sign1")
 print("Task:")
@@ -589,4 +599,3 @@ for (e in 1:length(expectancy_fixed)) {
       min_interact, sep=" ", end="\n\n")
 }
 ```
-
