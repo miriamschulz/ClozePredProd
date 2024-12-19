@@ -187,7 +187,7 @@ Inspect the actual questions:
 ```{r}
 questions <- arrange(questions, QuestionAbout, Answer, item_id)
 questions$HasQuestion <- NULL
-questions$Answer <- ifelse(questions$Answer == "D", "False", "True")
+#questions$Answer <- ifelse(questions$Answer == "D", "False", "True")
 write.csv(questions, "comprehension_questions.csv", row.names=FALSE)
 ```
 
