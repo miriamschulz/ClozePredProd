@@ -145,6 +145,13 @@ summary(colnames(dat) == colnames(fillers))
 all <- rbind(dat, fillers)
 ```
 
+Add the AnswerKey Column:
+
+```{r}
+all$AnswerKey <- ifelse(all$Answer == "FALSE", "F", ifelse(all$Answer == "TRUE", "J", ""))
+```
+
+
 Split into production and comprehension block, check stats
 
 ```{r}
