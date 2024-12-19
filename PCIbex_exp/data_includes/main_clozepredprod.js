@@ -461,9 +461,9 @@ Template(
         ,
         newText("RightText", "Yes")
         ,
-        newText("LeftKeyText", "Key D")
+        newText("LeftKeyText", "Key F")
         ,
-        newText("RightKeyText", "Key K")
+        newText("RightKeyText", "Key J")
         ,
         newCanvas("ComprehensionCanvas", 400,300)
             .add("center at 50%", 20, getText("ComprehensionQuestion").italic().cssContainer({"font-family": "monospace",  "font-size": "25px"}))
@@ -473,8 +473,8 @@ Template(
                 {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 20px 10px 20px"}))
             .add(300,200, getText("RightText").bold().cssContainer(
                 {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 12px 10px 12px"}))
-            .center()
-            .print()
+            // .center()
+            .print("center at 50vw", "middle at 40vh")
         ,
         newTimer("SimulatedDecisionTimer", 1000)
             .start()
@@ -486,7 +486,7 @@ Template(
         newCanvas("ComprehensionCanvasDecided", 400,300)
         ,
         newText("Answer", row.Answer)
-            .test.text("D")
+            .test.text("False")
                 .success(
                     getCanvas("ComprehensionCanvasDecided")
                         .add("center at 50%", 20, getText("ComprehensionQuestion").italic().cssContainer({"font-family": "monospace",  "font-size": "25px"}))
@@ -494,8 +494,8 @@ Template(
                         .add(300,150, getText("RightKeyText").cssContainer({"font-family": "monospace", "font-size": "20px",  "color": "black", "padding": "20px 10px 10px 10px"}))
                         .add(30, 200, getText("LeftText").bold().cssContainer({"font-family": "monospace", "font-size": "30px", "border": "solid 1px green", "padding": "10px 20px 10px 20px", "color": "green"}))
                         .add(300,200, getText("RightText").bold().cssContainer({"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 12px 10px 12px", "color": "black"}))
-                        .center()
-                        .print()
+                        // .center()
+                        .print("center at 50vw", "middle at 40vh")
                 )
                 .failure(
                     getCanvas("ComprehensionCanvasDecided")
@@ -504,19 +504,23 @@ Template(
                         .add(300,150, getText("RightKeyText").cssContainer({"font-family": "monospace", "font-size": "20px",  "color": "green", "padding": "20px 10px 10px 10px"}))
                         .add(30 ,200, getText("LeftText").bold().cssContainer({"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 20px 10px 20px", "color": "black"}))
                         .add(300,200, getText("RightText").bold().cssContainer({"font-family": "monospace", "font-size": "30px", "border": "solid 1px green", "padding": "10px 12px 10px 12px", "color": "green"}))
-                        .center()
-                        .print()
+                        // .center()
+                        .print("center at 50vw", "middle at 40vh")
                 )
         ,
         newTimer("DisplayTimer", 1500)
             .start()
             .wait()
         ,
-        newText("ContinueText", "Press Enter to continue.")
-            .cssContainer({"font-size": "30px"})
-            .print()
-            .center()
-            .italic()
+        getCanvas("ComprehensionCanvasDecided")
+            .add(50, 300,
+                newText("ContinueText", "Press Enter to continue.")
+                    .cssContainer({"font-size": "30px", "color": "blue"})
+                    // .print("center at 50vw", "middle at 60vh")
+                    .print()
+                    // .center()
+                    .italic()
+            )
         ,
         newKey("ContinueKey", "Enter")
             .wait()
@@ -596,9 +600,9 @@ Template(
         ,
         newText("RightText", "Yes")
         ,
-        newText("LeftKeyText", "Key D")
+        newText("LeftKeyText", "Key F")
         ,
-        newText("RightKeyText", "Key K")
+        newText("RightKeyText", "Key J")
         ,
         newCanvas("ComprehensionCanvas", 400,300)
             // .add(0,0, getText("ComprehensionQuestion").center().italic().cssContainer({"font-family": "monospace", "font-size": "25px", "padding-top": "50px"}))
@@ -613,7 +617,7 @@ Template(
                 {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 12px 10px 12px"}))
             .center()
         ,
-        newKey("ComprehensionKey", "DK")
+        newKey("ComprehensionKey", "FJ")
         ,
         // Define a variable to store whether the current answer is true/false
         // or "NA" if the trial is not followed by any comprehension question
@@ -636,10 +640,10 @@ Template(
                     newCanvas("ComprehensionCanvasDecided", 400,300)
                     ,
                     getKey("ComprehensionKey")
-                        .test.pressed(row.Answer)
+                        .test.pressed(row.AnswerKey)
                             .success(
                                 getKey("ComprehensionKey")
-                                    .test.pressed("D")
+                                    .test.pressed("F")
                                         .success(
                                             getCanvas("ComprehensionCanvasDecided")
                                                 .add("center at 50%", 20, getText("ComprehensionQuestion").italic().cssContainer({"font-family": "monospace",  "font-size": "25px"}))
@@ -669,7 +673,7 @@ Template(
                             )
                             .failure(
                                 getKey("ComprehensionKey")
-                                    .test.pressed("D")
+                                    .test.pressed("F")
                                         .success(
                                             getCanvas("ComprehensionCanvasDecided")
                                                 .add("center at 50%", 20, getText("ComprehensionQuestion").italic().cssContainer({"font-family": "monospace",  "font-size": "25px"}))
@@ -897,15 +901,15 @@ Template("comprehension_l1_pseudorandomized.csv", row =>
         ,
         newCanvas("ComprehensionCanvas", 400,300)
             .add("center at 50%", 20, getText("ComprehensionQuestion").italic().cssContainer({"font-family": "monospace",  "font-size": "25px"}))
-            .add(30, 150, newText("Key D").cssContainer({"font-family": "monospace", "font-size": "20px", "padding": "20px 10px 10px 10px"}))
-            .add(300,150, newText("Key K").cssContainer({"font-family": "monospace", "font-size": "20px", "padding": "20px 10px 10px 10px"}))
+            .add(30, 150, newText("Key F").cssContainer({"font-family": "monospace", "font-size": "20px", "padding": "20px 10px 10px 10px"}))
+            .add(300,150, newText("Key J").cssContainer({"font-family": "monospace", "font-size": "20px", "padding": "20px 10px 10px 10px"}))
             .add(30, 200, getText("LeftText").bold().cssContainer(
                 {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 20px 10px 20px"}))
             .add(300,200, getText("RightText").bold().cssContainer(
                 {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 12px 10px 12px"}))
             .center()
         ,
-        newKey("ComprehensionKey", "DK")
+        newKey("ComprehensionKey", "FJ")
         ,
         // Define a variable to store whether the current answer is true/false
         // or "NA" if the trial is not followed by any comprehension question
@@ -921,7 +925,7 @@ Template("comprehension_l1_pseudorandomized.csv", row =>
                     getKey("ComprehensionKey")
                         .wait()
                         .log()
-                        .test.pressed(row.Answer)
+                        .test.pressed(row.AnswerKey)
                             .success(
                                 getVar("ComprehensionAccuracyVar").set(v=>[...v,true])
                                 ,
@@ -959,7 +963,7 @@ Template("comprehension_l1_pseudorandomized.csv", row =>
                     .test.text("Yes")
                     .success(
                         getKey("ComprehensionKey")
-                            .test.pressed(row.Answer)
+                            .test.pressed(row.AnswerKey)
                                 .success(newText("Correct!").cssContainer({"font-family": "monospace", "font-size": "25px", "padding": "10px 10px 10px 10px", "color": "green",  "font-weight": "bold"}).print())
                                 .failure(newText("Incorrect!").cssContainer({"font-family": "monospace", "font-size": "25px", "padding": "10px 10px 10px 10px", "color": "red",  "font-weight": "bold"}).print())
                         ,
