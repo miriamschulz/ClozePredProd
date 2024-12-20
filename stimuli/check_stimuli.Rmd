@@ -28,11 +28,12 @@ In a first step, the data is read in and the chosen items (indicated by a $1$ in
 
 ```{r, message=FALSE}
 library("tidyverse")
+rm(list = ls())
 ```
 
 ```{r cars}
 # Read in the data
-dat <- read.csv("stim_cand.csv", header=TRUE)
+dat <- read.csv("stim_exp.csv", header=TRUE)
 
 # Filter the data set for the chosen candidate items
 dat <- filter(dat, candidates=="1")
@@ -83,10 +84,10 @@ check_overlap <- function(data, col1, col2) {
 }
 ```
 
-Print the deuplicate nouns:
+Print the duplicate nouns:
 
 ```{r}
-overlap <- check_overlap(dat, "W3", "response")
+overlap <- check_overlap(dat, "W3", "target")
 overlap
 ```
 
@@ -97,7 +98,7 @@ Check if a noun has been used as context or target noun in the items, or if it i
 
 ```{r}
 # Create a set of all nouns used as context or target noun in the items:
-noun_set <- sort(unique(c(dat$W3, dat$response)))
+noun_set <- sort(unique(c(dat$W3, dat$target)))
 # Check if a specific word is present in this set (TRUE/FALSE):
 "mother" %in% noun_set
 "work" %in% noun_set
@@ -118,6 +119,7 @@ fillers <- read.csv("fillers.csv", header=TRUE)
 filler_sentences <- c(fillers$Sentence, fillers$Target)
 
 # Split the sentences into individual words
+filler_sentences <- gsub("[[:punct:]]", "", filler_sentences)
 filler_words <- unique(tolower(unlist(strsplit(filler_sentences, "\\s+"))))
 filler_words <- filler_words[filler_words != ""]  # remove empty string
 #head(filler_words)
@@ -156,16 +158,31 @@ write.csv(spill1_table, "spillover_counts_spill1.csv", row.names=FALSE)
 ```
 
 
+# Filler conditions
+
+```{r}
+# Filler conditions
+xtabs(~ FillerType, fillers)
+
+# Unexpectedness in both filler conditions
+xtabs(~ FillerType + Unexpected, filter(fillers, FillerType %in% c("Short", "StructureVariation")))
+prop.table(xtabs(~ FillerType + Unexpected, filter(fillers, FillerType %in% c("Short", "StructureVariation"))), margin=1)
+```
+
+
 # Comprehension questions
 
 ## Check the comprehension questions in the items
 
 ```{r}
 dat$Sentence <- paste(dat$W1, dat$W2, dat$W3, dat$W4, dat$W5, 
-                      dat$LastWord, dat$response,
+                      dat$LastWord, dat$target,
                       dat$Spill1, dat$Spill2, dat$Continuation, dat$End,
                       sep = " ")
-                      
+# Remove trailing whitespaces
+dat <- dat %>% 
+  mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
+
 questions <- select(dat, item_id, Sentence, HasQuestion, Question, Answer, QuestionAbout)
 
 # Check that 1/3 of all items have a question:
@@ -196,7 +213,7 @@ write.csv(questions, "comprehension_questions.csv", row.names=FALSE)
 
 ```{r}
 fillers <- filter(fillers, !(FillerType %in% c("prac_comprehension", "prac_production")))
-questions_fillers <- select(fillers, Filler_id, FillerType, UnexpectedNoun, Sentence, Target,
+questions_fillers <- select(fillers, Filler_id, FillerType, Unexpected, Sentence, Target,
                             HasQuestion, Question, Answer, QuestionAbout)
 
 # Check that 1/3 of all items have a question:
@@ -217,6 +234,44 @@ xtabs(~ FillerType + Answer, questions_fillers)
 
 # Check that there are some unexpected nouns with questions
 # (but distribution won't be 50-50 bc there are fewer unexpected noun fillers)
-xtabs(~ UnexpectedNoun, questions_fillers)
+xtabs(~ Unexpected, questions_fillers)
+xtabs(~ FillerType + Unexpected, questions_fillers)
+```
+
+
+# Pre-cloze context sentence length
+
+## Context sentence length in the items
+
+```{r}
+dat$Sentence <- paste(dat$W1, dat$W2, dat$W3, dat$W4, dat$W5, 
+                      dat$LastWord, dat$target,
+                      dat$Spill1, dat$Spill2, dat$Continuation,# dat$End,
+                      sep = " ")
+# Remove trailing whitespaces
+dat <- dat %>% 
+  mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
+
+range(sapply(str_split(dat$Sentence, " "), length))
+mean(sapply(str_split(dat$Sentence, " "), length))
+```
+
+## Context sentence length in the fillers
+
+```{r}
+range(sapply(str_split(fillers$Sentence, " "), length))
+mean(sapply(str_split(fillers$Sentence, " "), length))
+```
+
+Split into short vs. structure variation fillers:
+
+```{r}
+short <- filter(fillers, FillerType == "Short")
+range(sapply(str_split(short$Sentence, " "), length))
+mean(sapply(str_split(short$Sentence, " "), length))
+
+variation <- filter(fillers, FillerType == "StructureVariation")
+range(sapply(str_split(variation$Sentence, " "), length))
+mean(sapply(str_split(variation$Sentence, " "), length))
 ```
 
