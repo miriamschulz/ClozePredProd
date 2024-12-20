@@ -29,7 +29,7 @@ library("tidyverse")
 
 ```{r}
 rm(list = ls())  # optional, clear workspace
-dat <- read.csv("stim_cand.csv", header=TRUE)
+dat <- read.csv("stim_exp.csv", header=TRUE)
 dat <- filter(dat, candidates=="1")
 xtabs(~ candidates + item_id, dat)
 
@@ -51,7 +51,7 @@ First, select the necessary columns.
 
 ```{r}
 dat <- rename(dat,  ItemNum = item_id)
-dat <- rename(dat,  TargetWord = response)
+dat <- rename(dat,  TargetWord = target)
 dat$Type <- "ExpItem"
 dat$ExpCondition <- rep(c("High", "Low"), times=nrow(dat)/2)
 dat$TargetPosition <- 6
@@ -112,7 +112,7 @@ fillers <- filter(fillers, ItemNum < 500)
 fillers$ItemNum <- fillers$ItemNum + 1000
 
 # Append to the filler condition if something is unexpected
-fillers$Unexpected <- ifelse(fillers$UnexpectedNoun == "yes", "Unexp", "Exp")
+fillers$Unexpected <- ifelse(fillers$Unexpected == "yes", "Unexp", "Exp")
 fillers$ExpCondition <- paste(fillers$ExpCondition, fillers$Unexpected, sep="_")
 
 fillers$Group <- 0  #TODO create actual Latin groups
