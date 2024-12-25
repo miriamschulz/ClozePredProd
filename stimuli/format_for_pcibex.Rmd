@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # About
 
-This script reads in a `csv` stimuli file for the Cloze Prediction & Production experiment and transforms the items to a `csv` file that can be used as a data file on PCIbex.
+This script reads in a `csv` stimuli and fillers file for the Cloze Prediction & Production experiment and transforms the items to a `csv` file that can be used as a data file on PCIbex.
 
 
 # Experimental items
@@ -55,12 +55,13 @@ dat <- rename(dat,  TargetWord = target)
 dat$Type <- "ExpItem"
 dat$ExpCondition <- rep(c("High", "Low"), times=nrow(dat)/2)
 dat$TargetPosition <- 6
-dat$Group <- rep(c(1, 2, 2, 1), times=nrow(dat)/2)[1:nrow(dat)]  #TODO create actual Latin groups
-dat$Block <- rep(c("comp", "prod", "prod", "comp",
-                   "prod", "comp", "comp", "prod"),
-              each=2,
-              times=nrow(dat)/2)[1:nrow(dat)]
-xtabs(~ Block, dat)
+
+# dat$Group <- rep(c(1, 2, 2, 1), times=nrow(dat)/2)[1:nrow(dat)]  #TODO create actual Latin groups
+# dat$Block <- rep(c("comp", "prod", "prod", "comp",
+#                    "prod", "comp", "comp", "prod"),
+#               each=2,
+#               times=nrow(dat)/2)[1:nrow(dat)]
+# xtabs(~ Block, dat)
 
 dat$Sentence <- paste(dat$W1, dat$W2, 
                               dat$W3, dat$W4,
@@ -72,11 +73,13 @@ dat$Sentence <- paste(dat$W1, dat$W2,
 dat <- select(
   dat,
   c(
-    "Group", "Block", "ItemNum",
+    #"Group", "Block",
+    "ItemNum",
     "Type", "ExpCondition",
     "Sentence", "End",
     "TargetPosition", "TargetWord", "Lg10WF",
-    "HasQuestion", "Question", "Answer"
+    "HasQuestion", "Question", "Answer",
+    "overlap_t", "overlap_c"
   )
 )
 ```
@@ -115,25 +118,29 @@ fillers$ItemNum <- fillers$ItemNum + 1000
 fillers$Unexpected <- ifelse(fillers$Unexpected == "yes", "Unexp", "Exp")
 fillers$ExpCondition <- paste(fillers$ExpCondition, fillers$Unexpected, sep="_")
 
-fillers$Group <- 0  #TODO create actual Latin groups
-fillers$Block <- rep(c("comp", "prod", "prod", "comp",
-                       "prod", "comp", "comp", "prod"),
-              times=nrow(fillers))[1:nrow(fillers)]
-xtabs(~ Block, fillers)
+# fillers$Group <- 0  #TODO create actual Latin groups
+# fillers$Block <- rep(c("comp", "prod", "prod", "comp",
+#                        "prod", "comp", "comp", "prod"),
+#               times=nrow(fillers))[1:nrow(fillers)]
+# xtabs(~ Block, fillers)
 
 fillers <- rename(fillers, End = Target)
 fillers$TargetPosition <- NA
 fillers$TargetWord <- NA
 fillers$Lg10WF <- NA
+fillers$overlap_t <- NA
+fillers$overlap_c <- NA
 
 fillers <- select(
   fillers,
   c(
-    "Group", "Block", "ItemNum",
+    #"Group", "Block",
+    "ItemNum",
     "Type", "ExpCondition",
     "Sentence", "End",
     "TargetPosition", "TargetWord", "Lg10WF",
-    "HasQuestion", "Question", "Answer"
+    "HasQuestion", "Question", "Answer",
+    "overlap_t", "overlap_c"
   )
 )
 ```
@@ -148,66 +155,27 @@ all <- rbind(dat, fillers)
 Add the AnswerKey Column:
 
 ```{r}
-all$AnswerKey <- ifelse(all$Answer == "FALSE", "F", ifelse(all$Answer == "TRUE", "J", ""))
+all$AnswerKey <- ifelse(all$Answer == "FALSE", "F",
+                        ifelse(all$Answer == "TRUE", "J", ""))
 ```
 
+# Check results and export
 
-Split into production and comprehension block, check stats
-
-```{r}
-comp <- filter(all, Block == "comp")
-prod <- filter(all, Block == "prod")
-
-xtabs(~ Type, prod)
-xtabs(~ Type, comp)
-
-xtabs(~ HasQuestion, prod)
-xtabs(~ HasQuestion, comp)
-
-xtabs(~ Answer, prod)
-xtabs(~ Answer, comp)
-```
-
-
-### Comprehension block
-
-For the comprehension file, we can simply concatenate the entire sentence into a string:
+Check:
 
 ```{r}
-comp$Sentence <- paste(comp$Sentence, comp$End, sep = " ")
-comp <- comp %>% 
-  mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
-#comp$End <- NULL
-
-comp_l1 <- filter(comp, Group %in% c(0, 1))
-comp_l1$Group <- 1
-comp_l2 <- filter(comp, Group %in% c(0, 2))
-comp_l2$Group <- 2
-write.csv(comp_l1, "comprehension_l1.csv", row.names=FALSE)
-write.csv(comp_l2, "comprehension_l2.csv", row.names=FALSE)
+xtabs(~ ExpCondition, all)
 ```
 
 ```{r}
-nrow(comp_l1)
-xtabs(~ Type, comp_l1)
-xtabs(~ ExpCondition, comp_l1)
+prop.table(xtabs(~ HasQuestion, all))
+xtabs(~ Answer, all)
 ```
 
-
-### Production block
+Write to file:
 
 ```{r}
-#prod$End <- NULL
-prod <- prod %>% 
-  mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
-prod$Sentence <- trimws(prod$Sentence, which = "both")
-
-prod_l1 <- filter(prod, Group %in% c(0, 1))
-prod_l1$Group <- 1
-prod_l2 <- filter(prod, Group %in% c(0, 2))
-prod_l2$Group <- 2
-write.csv(prod_l1, "production_l1.csv", row.names=FALSE)
-write.csv(prod_l2, "production_l2.csv", row.names=FALSE)
+write.csv(all, "stim_preprocessed.csv", row.names=FALSE)
 ```
 
 
@@ -244,6 +212,69 @@ prac$group <- 0
 
 ```{r}
 write.csv(prac, "practice.csv", row.names=FALSE)
+```
+
+
+# Split into Production & Comprehension blocks
+
+*NOTE: THIS PART NEEDS TO BE MOVED TO A DIFFERENT SCRIPT, THEREFORE THE CODE BELOW THIS POINT WILL NOT BE EVALUATED.*
+
+Split into production and comprehension block, check stats
+
+```{r, eval=FALSE}
+comp <- filter(all, Block == "comp")
+prod <- filter(all, Block == "prod")
+
+xtabs(~ Type, prod)
+xtabs(~ Type, comp)
+
+xtabs(~ HasQuestion, prod)
+xtabs(~ HasQuestion, comp)
+
+xtabs(~ Answer, prod)
+xtabs(~ Answer, comp)
+```
+
+
+## Comprehension block
+
+For the comprehension file, we can simply concatenate the entire sentence into a string:
+
+```{r, eval=FALSE}
+comp$Sentence <- paste(comp$Sentence, comp$End, sep = " ")
+comp <- comp %>% 
+  mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
+#comp$End <- NULL
+
+comp_l1 <- filter(comp, Group %in% c(0, 1))
+comp_l1$Group <- 1
+comp_l2 <- filter(comp, Group %in% c(0, 2))
+comp_l2$Group <- 2
+write.csv(comp_l1, "comprehension_l1.csv", row.names=FALSE)
+write.csv(comp_l2, "comprehension_l2.csv", row.names=FALSE)
+```
+
+```{r, eval=FALSE}
+nrow(comp_l1)
+xtabs(~ Type, comp_l1)
+xtabs(~ ExpCondition, comp_l1)
+```
+
+
+## Production block
+
+```{r, eval=FALSE}
+#prod$End <- NULL
+prod <- prod %>% 
+  mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
+prod$Sentence <- trimws(prod$Sentence, which = "both")
+
+prod_l1 <- filter(prod, Group %in% c(0, 1))
+prod_l1$Group <- 1
+prod_l2 <- filter(prod, Group %in% c(0, 2))
+prod_l2$Group <- 2
+write.csv(prod_l1, "production_l1.csv", row.names=FALSE)
+write.csv(prod_l2, "production_l2.csv", row.names=FALSE)
 ```
 
 

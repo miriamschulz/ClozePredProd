@@ -114,6 +114,7 @@ Read in the file `fillers.csv` and write a function to check for overlap with th
 ```{r}
 # Read in the fillers
 fillers <- read.csv("fillers.csv", header=TRUE)
+#fillers <- filter(fillers, Chosen != "No")
 
 # Merge the context sentence and target columns into a single vector
 filler_sentences <- c(fillers$Sentence, fillers$Target)
@@ -164,7 +165,11 @@ write.csv(spill1_table, "spillover_counts_spill1.csv", row.names=FALSE)
 # Filler conditions
 xtabs(~ FillerType, fillers)
 
-# Unexpectedness in both filler conditions
+# Unexpected fillers
+xtabs(~ Unexpected, filter(fillers, FillerType %in% c("Short", "StructureVariation")))
+
+# Unexpectedness in both filler conditions (but not equally often,
+# because there are fewer options for short unexpected fillers)
 xtabs(~ FillerType + Unexpected, filter(fillers, FillerType %in% c("Short", "StructureVariation")))
 prop.table(xtabs(~ FillerType + Unexpected, filter(fillers, FillerType %in% c("Short", "StructureVariation"))), margin=1)
 ```
@@ -188,6 +193,7 @@ questions <- select(dat, item_id, Sentence, HasQuestion, Question, Answer, Quest
 # Check that 1/3 of all items have a question:
 length(unique(questions$item_id))  # N all items
 xtabs(~ HasQuestion, questions) /2  # N items with question
+prop.table(xtabs(~ HasQuestion, questions))  # % items with question
 
 # Subset
 questions <- filter(questions, HasQuestion == "Yes")
@@ -213,29 +219,35 @@ write.csv(questions, "comprehension_questions.csv", row.names=FALSE)
 
 ```{r}
 fillers <- filter(fillers, !(FillerType %in% c("prac_comprehension", "prac_production")))
+
 questions_fillers <- select(fillers, Filler_id, FillerType, Unexpected, Sentence, Target,
                             HasQuestion, Question, Answer, QuestionAbout)
 
 # Check that 1/3 of all items have a question:
 length(unique(questions_fillers$Filler_id))  # N all fillers
 xtabs(~ HasQuestion, questions_fillers)  # N fillers with question
+prop.table(xtabs(~ HasQuestion, questions_fillers))  # % fillers with question
 
 # Subset
 questions_fillers <- filter(questions_fillers, HasQuestion == "Yes")
 
+# Check that each filler type has a question ~ equally often
+xtabs(~ FillerType, questions_fillers)
+
+# Check that there are ~ equally many questions per expected/unespectedness
+xtabs(~ Unexpected, questions_fillers)
+
+# Less important, but avoid any strong imbalance here:
+xtabs(~ FillerType + Unexpected, questions_fillers)
+
 # Check that there is a question about each sentence position ~ equally often
 xtabs(~ QuestionAbout, questions_fillers)
 
-# Check that each sentence position has a true vs. false answer ~ equally often
+# Check that each answer occurs equally often:
+xtabs(~ Answer, questions_fillers)
+xtabs(~ Answer + Unexpected, questions_fillers)
+xtabs(~ Answer + FillerType, questions_fillers)
 xtabs(~ Answer + QuestionAbout, questions_fillers)
-
-# Check that each filler type has equal amounts of true/false answers
-xtabs(~ FillerType + Answer, questions_fillers)
-
-# Check that there are some unexpected nouns with questions
-# (but distribution won't be 50-50 bc there are fewer unexpected noun fillers)
-xtabs(~ Unexpected, questions_fillers)
-xtabs(~ FillerType + Unexpected, questions_fillers)
 ```
 
 
@@ -259,19 +271,22 @@ mean(sapply(str_split(dat$Sentence, " "), length))
 ## Context sentence length in the fillers
 
 ```{r}
-range(sapply(str_split(fillers$Sentence, " "), length))
-mean(sapply(str_split(fillers$Sentence, " "), length))
+#range(sapply(str_split(fillers$Sentence, " "), length))
+#mean(sapply(str_split(fillers$Sentence, " "), length))
+fillers$ContextLength <- sapply(str_split(fillers$Sentence, " "), length)
+range(fillers$ContextLength)
+mean(fillers$ContextLength)
 ```
 
 Split into short vs. structure variation fillers:
 
 ```{r}
 short <- filter(fillers, FillerType == "Short")
-range(sapply(str_split(short$Sentence, " "), length))
-mean(sapply(str_split(short$Sentence, " "), length))
+range(short$ContextLength)
+mean(short$ContextLength)
 
 variation <- filter(fillers, FillerType == "StructureVariation")
-range(sapply(str_split(variation$Sentence, " "), length))
-mean(sapply(str_split(variation$Sentence, " "), length))
+range(variation$ContextLength)
+mean(variation$ContextLength)
 ```
 
