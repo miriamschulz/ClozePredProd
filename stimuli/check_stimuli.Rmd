@@ -16,8 +16,16 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # About
 
-This script reads in a `csv` stimuli file for the Cloze Prediction & Production experiment as well as the fillers file
-and checks for overlap of the nouns within and across both sets.
+This script reads in a `csv` stimuli file for the Cloze Prediction & Production experiment as well as the fillers file and performs multiple checks over the stimuli:
+
+- Overlap of the nouns within and across both sets (there should be no overlap between nouns used in the fillers and context/target item nouns, and overlap within the items will be mitigated using Latin square lists and distribution of stimuli into experimental blocks)
+- Mean target noun length and frequency by condition
+- Spillover words ("continuations"): should be short and mainly closed class
+- Filler conditions: should show a distribution into 50/50 short and structure variation fillers, and 50/50 expected and unexpected fillers (but not evenly crossed into both subcategories, because it is difficult to construct natural short unexpected production fillers)
+- Comprehension questions
+- Context sentence length preceding the cloze word
+- Latin square distribution
+- Block distribution
 
 
 # Duplicate checks
@@ -141,6 +149,22 @@ check_filler_overlap(noun_set, filler_words)
 ```
 
 
+# Mean Target Length and Cloze probability by Condition
+
+```{r}
+dat %>% 
+  group_by(cond) %>% 
+  summarize(mean(length))
+```
+
+
+```{r}
+dat %>% 
+  group_by(cond) %>% 
+  summarize(mean(cloze_prob))
+```
+
+
 # Continuations
 
 ## Check the continuations (spillover regions)
@@ -179,7 +203,7 @@ prop.table(xtabs(~ FillerType + Unexpected, filter(fillers, FillerType %in% c("S
 
 # Comprehension questions
 
-## Check the comprehension questions in the items
+## Items
 
 ```{r}
 dat$Sentence <- paste(dat$W1, dat$W2, dat$W3, dat$W4, dat$W5, 
@@ -217,7 +241,7 @@ write.csv(questions, "comprehension_questions.csv", row.names=FALSE)
 ```
 
 
-## Check the comprehension questions in the fillers
+## Fillers
 
 ```{r}
 fillers <- filter(fillers, !(FillerType %in% c("prac_comprehension", "prac_production")))
@@ -255,7 +279,7 @@ xtabs(~ Answer + QuestionAbout, questions_fillers)
 
 # Pre-cloze context sentence length
 
-## Context sentence length in the items
+## Items
 
 ```{r}
 dat$Sentence <- paste(dat$W1, dat$W2, dat$W3, dat$W4, dat$W5, 
@@ -270,7 +294,7 @@ range(sapply(str_split(dat$Sentence, " "), length))
 mean(sapply(str_split(dat$Sentence, " "), length))
 ```
 
-## Context sentence length in the fillers
+## Fillers
 
 ```{r}
 #range(sapply(str_split(fillers$Sentence, " "), length))
@@ -391,6 +415,7 @@ fillers$cond <- ifelse(fillers$Unexpected == "yes",
 fillers$QuestionAbout <- ifelse(fillers$QuestionAbout == "Adjective/Adverb",
                                 "Adjective", fillers$QuestionAbout)
 xtabs(~ cond, fillers)
+xtabs(~ Block + cond, fillers)
 
 # Duplicate for Latin lists
 fillers <- rbind(fillers, fillers)
