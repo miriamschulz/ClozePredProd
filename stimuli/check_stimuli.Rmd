@@ -353,3 +353,13 @@ xtabs(~ Block + Answer, dat) / 2
 xtabs(~ Block + QuestionAbout, dat) / 2
 ```
 
+Also check that the division of target and context nouns into blocks worked (in each Latin list, this should range from 0x to 1x max for each block):
+
+```{r}
+# Targets: 
+range(xtabs(~ target + Block + Latin_list, dat))
+
+# Context nouns:
+range(xtabs(~ W3 + Block + Latin_list, dat))
+```
+
