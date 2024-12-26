@@ -71,6 +71,8 @@ check_overlap <- function(data, col1, col2) {
   duplicates_all_table <- duplicates_all_table[!is.na(names(duplicates_all_table))]
 
   print("Duplicates across both context and target nouns:")
+  #print(length(duplicates_all_table))
+  #print(sum(duplicates_all_table)) # 80 context nouns + N=4 overlapping nouns
   print(duplicates_all_table)
   
   common_words <- intersect(data[[col1]], data[[col2]])
@@ -315,5 +317,39 @@ range(xtabs(~ item_id + cond, dat))
 xtabs(~ target + Latin_list, dat)
 target_xtabs <- as.data.frame(xtabs(~ target + Latin_list, dat))
 target_xtabs[order(target_xtabs$Freq, target_xtabs$Latin_list), ]
+```
+
+
+# Division into blocks
+
+Each list is divided into 4 blocks: one comprehension block and one production block, each divided in two to allow for a small break.
+
+The distribution of items into blocks is used to keep some items apart, based on the following constraints:
+
+- duplicate targets within a list must be kept maximally far apart (blocks 1 and 4)
+- targets that also appear as a context noun must appear first (block 1) and be kept maximally far apart from the item with the same context noun (block 4)
+- context nouns that appear several times must be placed maximally apart, into different blocks (if a noun appears 2x, blocks 1+4; if it appears 4x (max, 'girl'), once in each block)
+
+The definition of these hard constrains was done manually on the Google docs.
+
+The constraints will not be balanced:
+
+```{r}
+xtabs(~ Latin_list + Block_constraints, dat)
+# xtabs(~ Block_constraints + cond + Latin_list, dat)
+# xtabs(~ Block_constraints + HasQuestion + Latin_list, dat)
+# xtabs(~ Block_constraints + Answer + Latin_list, dat)
+```
+
+But the final block distribution should be balanced with respect to the conditions and N questions in each block:
+
+```{r}
+xtabs(~ Latin_list + Block, dat, addNA=T)
+xtabs(~ Block + cond + Latin_list, dat)
+
+# xtabs(~ Block + HasQuestion + Latin_list, dat)
+xtabs(~ Block + HasQuestion, dat) / 2
+xtabs(~ Block + Answer, dat) / 2
+xtabs(~ Block + QuestionAbout, dat) / 2
 ```
 
