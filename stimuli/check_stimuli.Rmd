@@ -322,6 +322,8 @@ target_xtabs[order(target_xtabs$Freq, target_xtabs$Latin_list), ]
 
 # Division into blocks
 
+## Items
+
 Each list is divided into 4 blocks: one comprehension block and one production block, each divided in two to allow for a small break.
 
 The distribution of items into blocks is used to keep some items apart, based on the following constraints:
@@ -361,5 +363,57 @@ range(xtabs(~ target + Block + Latin_list, dat))
 
 # Context nouns:
 range(xtabs(~ W3 + Block + Latin_list, dat))
+```
+
+
+## Fillers
+
+Check the distribution of items AND fillers in each block.
+
+Fillers are used to counterbalance: 
+
+- The N of questions per block
+- The N of each answer (TRUE/FALSE) per block
+- The QuestionAbout per block: ask approximately equally ofen about each sentence part.
+  
+Also, there should be roughtly the same N of expected/unexpected and short/variation fillers in each block.
+
+The distribution of fillers into blocks was done manually on the fillers Google doc.
+
+```{r}
+xtabs(~ Block, fillers)
+
+# Pre-format the fillers to merge
+fillers <- rename(fillers, item_id = Filler_id)
+fillers$cond <- ifelse(fillers$Unexpected == "yes",
+                       paste(fillers$FillerType, "Unexp", sep="_"),
+                       paste(fillers$FillerType, "Exp", sep="_"))
+fillers$QuestionAbout <- ifelse(fillers$QuestionAbout == "Adjective/Adverb",
+                                "Adjective", fillers$QuestionAbout)
+xtabs(~ cond, fillers)
+
+# Duplicate for Latin lists
+fillers <- rbind(fillers, fillers)
+fillers$Latin_list <- rep(1:2, each = nrow(fillers)/2)
+
+# Merge fillers and items
+all <- rbind(select(dat, item_id, cond, Latin_list, Block, HasQuestion, QuestionAbout, Answer),
+             select(fillers, item_id, cond, Latin_list, Block, HasQuestion, QuestionAbout, Answer))
+
+# Check final distribution
+xtabs(~ Block + Latin_list, all)
+xtabs(~ cond + Latin_list, all)
+xtabs(~ Block + cond + Latin_list, all)
+
+# Now these should all be balanced (in the columns):
+xtabs(~ Block + HasQuestion, all) / 2
+xtabs(~ Block + Answer, all) / 2
+xtabs(~ Block + QuestionAbout, all) / 2
+
+# Check in depth: cond + block + question + list; 
+# these should be balanced row-wise:
+xtabs(~ cond + Block + Latin_list, all)
+xtabs(~ cond + Block + Latin_list, filter(all, HasQuestion == "Yes"))
+xtabs(~ cond + Block + Latin_list, filter(all, HasQuestion == ""))
 ```
 
