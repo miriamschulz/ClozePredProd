@@ -290,3 +290,30 @@ range(variation$ContextLength)
 mean(variation$ContextLength)
 ```
 
+
+# Latin square distribution
+
+Some targets appear multiple times in the stimuli.
+
+Targets that appear 2x in the stimuli must be put in separate lists.
+
+The three targets that appear 3x each must be put in different lists but will inevitably occur twice in one list ('game', 'house', 'book').
+
+```{r}
+# The key constraints may specify an unequal distribution
+xtabs(~ cond + Latin_constraints, dat)
+
+# However, the full Latin square must be fully balanced:
+xtabs(~ cond + Latin_list, dat)
+
+# Each item must appear only once in each list, and not 0x in one and 2x in the
+# other, so the range should be from 1 to 1:
+range(xtabs(~ item_id + cond, dat))
+
+# Each target must appear only once per list, with the exception of 
+# game, house and book:
+xtabs(~ target + Latin_list, dat)
+target_xtabs <- as.data.frame(xtabs(~ target + Latin_list, dat))
+target_xtabs[order(target_xtabs$Freq, target_xtabs$Latin_list), ]
+```
+
