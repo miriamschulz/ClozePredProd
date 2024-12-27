@@ -22,10 +22,9 @@ Sequence(
          "instructions_comp2",
          "practice_comp",
          "transition_comp",
-         seq("comprehension"),
-         // randomizeNoMoreThan(anyOf("comp_high",
-         //                           "comp_low",
-         //                           "comp_filler2"), 1),
+         seq("comprehension1"),  // block 1 comprehension
+         "minibreak_comp",
+         seq("comprehension2"),  // block 2 comprehension
 
          // Block transition
          "transition_blocks",
@@ -39,8 +38,11 @@ Sequence(
          "instructions_prod_final_example",
          "instructions_prod4",
          seq("practice_prod"),
-         "transition_prod",
-         sepWith("sendAsync", seq("production")),
+         "minibreak_prod",
+         sepWith("sendAsync", seq("production1")),  // block 1 production
+         "syncUpload",  // upload last trial TODO: necessary here?
+         "transition_miniblocks",
+         sepWith("sendAsync", seq("production2")),  // block 2 production
          "syncUpload",  // upload last trial
 
          // Post-experimental survey + send results
@@ -182,8 +184,28 @@ PennController("transition_blocks",
     newButton("Continue to the second part")
         .print()
         .wait()
- )
- .log("TrialType", "Survey")
+)
+.log("TrialType", "Survey")
+
+// Mini block transition comp
+PennController("minibreak_comp",
+   newHtml("minibreak_comp", "minibreak_comp.html")
+   ,
+   newButton("Continue to the second block")
+       .print()
+       .wait()
+)
+.log("TrialType", "Survey")
+
+// Mini block transition prod
+PennController("minibreak_prod",
+   newHtml("minibreak_prod", "minibreak_prod.html")
+   ,
+   newButton("Continue to the second block")
+       .print()
+       .wait()
+)
+.log("TrialType", "Survey")
 
 // Transition to post-experimental survey
 PennController("transition_survey",
@@ -872,8 +894,8 @@ Template(
 
 ////////////////////////////////////////////////////////////////////////////////
 //// Comprehension block
-Template("comprehension_l1_pseudorandomized.csv", row =>
-    newTrial("comprehension",
+Template("list1_block1_comp_pseudorandomized.csv", row =>
+    newTrial("comprehension1",
 
         //// Initialize trial ////
 
@@ -978,14 +1000,18 @@ Template("comprehension_l1_pseudorandomized.csv", row =>
             .wait()
     )
     // Basic trial information
-    .log("LatinList", row.Group)
-    .log("Block", "Comprehension")
+    .log("RandomOrder", row.Group)
+    .log("LatinList", row.Latin_list)
+    .log("Block", row.Block)
+    .log("Task", "Comprehension")
     .log("ExpItemNum", row.ItemNum)
     .log("ExpItemType", row.Type)
     .log("ExpCondition", row.ExpCondition)
     .log("TargetPosition", row.TargetPosition)
     .log("TargetWord", row.TargetWord)
     .log("TargetFreq", row.Lg10WF)
+    .log("TargetLength", row.TargetLength)
+    .log("ContextNoun", row.ContextNoun)
     .log("SentenceEnd", row.End)
     .log("TrialCounterGlobal", getVar("TrialCounterGlobal"))
     .log("TrialCounterBlock", getVar("TrialCounterComprehension"))
@@ -999,8 +1025,8 @@ Template("comprehension_l1_pseudorandomized.csv", row =>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Production block
-Template("production_l1_pseudorandomized.csv", row =>
-    newTrial("production",
+Template("list1_block3_prod_pseudorandomized.csv", row =>
+    newTrial("production1",
 
         //// Initialize trial ////
 
@@ -1118,14 +1144,18 @@ Template("production_l1_pseudorandomized.csv", row =>
             .log()
     )
     // Basic trial information
-    .log("LatinList", row.Group)
-    .log("Block", "Production")
+    .log("RandomOrder", row.Group)
+    .log("LatinList", row.Latin_list)
+    .log("Block", row.Block)
+    .log("Task", "Production")
     .log("ExpItemNum", row.ItemNum)
     .log("ExpItemType", row.Type)
     .log("ExpCondition", row.ExpCondition)
     .log("TargetPosition", row.TargetPosition)
     .log("TargetWord", row.TargetWord)
     .log("TargetFreq", row.Lg10WF)
+    .log("TargetLength", row.TargetLength)
+    .log("ContextNoun", row.ContextNoun)
     .log("SentenceEnd", row.End)
     .log("TrialCounterGlobal", getVar("TrialCounterGlobal"))
     .log("TrialCounterBlock", getVar("TrialCounterProduction"))
