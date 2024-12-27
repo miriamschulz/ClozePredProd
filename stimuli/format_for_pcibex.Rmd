@@ -30,8 +30,8 @@ library("tidyverse")
 ```{r}
 rm(list = ls())  # optional, clear workspace
 dat <- read.csv("stim_exp.csv", header=TRUE)
-dat <- filter(dat, candidates=="1")
-xtabs(~ candidates + item_id, dat)
+#dat <- filter(dat, candidates=="1")
+#xtabs(~ candidates + item_id, dat)
 
 # Print items that do not occur exactly twice
 subset(as.data.frame(xtabs(~ item_id + candidates, dat)), Freq != 2)
@@ -52,8 +52,10 @@ First, select the necessary columns.
 ```{r}
 dat <- rename(dat,  ItemNum = item_id)
 dat <- rename(dat,  TargetWord = target)
+dat <- rename(dat,  Group = Latin_list)
 dat$Type <- "ExpItem"
-dat$ExpCondition <- rep(c("High", "Low"), times=nrow(dat)/2)
+#dat$ExpCondition <- rep(c("High", "Low"), times=nrow(dat)/2)
+dat <- rename(dat,  ExpCondition = cond)
 dat$TargetPosition <- 6
 
 # dat$Group <- rep(c(1, 2, 2, 1), times=nrow(dat)/2)[1:nrow(dat)]  #TODO create actual Latin groups
@@ -70,16 +72,19 @@ dat$Sentence <- paste(dat$W1, dat$W2,
                               dat$Continuation, #dat$End,
                               sep = " ")
 
+dat <- rename(dat,  ContextNoun = W3)
+
 dat <- select(
   dat,
   c(
-    #"Group", "Block",
+    "Group", "Block",
     "ItemNum",
     "Type", "ExpCondition",
     "Sentence", "End",
     "TargetPosition", "TargetWord", "Lg10WF",
-    "HasQuestion", "Question", "Answer",
-    "overlap_t", "overlap_c"
+    "ContextNoun",
+    "HasQuestion", "Question", "Answer"
+    #"overlap_t", "overlap_c"
   )
 )
 ```
@@ -118,29 +123,29 @@ fillers$ItemNum <- fillers$ItemNum + 1000
 fillers$Unexpected <- ifelse(fillers$Unexpected == "yes", "Unexp", "Exp")
 fillers$ExpCondition <- paste(fillers$ExpCondition, fillers$Unexpected, sep="_")
 
-# fillers$Group <- 0  #TODO create actual Latin groups
-# fillers$Block <- rep(c("comp", "prod", "prod", "comp",
-#                        "prod", "comp", "comp", "prod"),
-#               times=nrow(fillers))[1:nrow(fillers)]
-# xtabs(~ Block, fillers)
+# Add Latin list
+fillers <- rbind(fillers, fillers)
+fillers$Group <- rep(1:2, each = nrow(fillers)/2)
 
 fillers <- rename(fillers, End = Target)
 fillers$TargetPosition <- NA
 fillers$TargetWord <- NA
 fillers$Lg10WF <- NA
-fillers$overlap_t <- NA
-fillers$overlap_c <- NA
+fillers$ContextNoun <- NA
+# fillers$overlap_t <- NA
+# fillers$overlap_c <- NA
 
 fillers <- select(
   fillers,
   c(
-    #"Group", "Block",
+    "Group", "Block",
     "ItemNum",
     "Type", "ExpCondition",
     "Sentence", "End",
     "TargetPosition", "TargetWord", "Lg10WF",
-    "HasQuestion", "Question", "Answer",
-    "overlap_t", "overlap_c"
+    "ContextNoun",
+    "HasQuestion", "Question", "Answer"
+    #"overlap_t", "overlap_c"
   )
 )
 ```
@@ -161,7 +166,7 @@ all$AnswerKey <- ifelse(all$Answer == "FALSE", "F",
 
 # Check results and export
 
-Check:
+Check for completeness and balancedness:
 
 ```{r}
 xtabs(~ ExpCondition, all)
@@ -170,12 +175,77 @@ xtabs(~ ExpCondition, all)
 ```{r}
 prop.table(xtabs(~ HasQuestion, all))
 xtabs(~ Answer, all)
+xtabs(~ AnswerKey, all)
 ```
 
-Write to file:
+Check for noun overlap:
 
 ```{r}
-write.csv(all, "stim_preprocessed.csv", row.names=FALSE)
+# Targets
+dupl_targets <- sort(table(dat[["TargetWord"]])[table(dat[["TargetWord"]]) > 1],
+                     decreasing=TRUE)
+dupl_targets
+length(dupl_targets)
+
+# Context nouns
+dupl_contexts <- sort(table(dat[["ContextNoun"]])[table(dat[["ContextNoun"]]) > 2],
+                      decreasing=TRUE) / 2
+dupl_contexts
+length(dupl_contexts)
+
+# Target & context
+context_nouns <- names(table(dat[["ContextNoun"]]) / 2)
+target_nouns <- names(table(dat[["TargetWord"]]))
+intersect(context_nouns, target_nouns)
+```
+
+Generate the other lists with a for loop and write to file:
+
+```{r}
+# write.csv(all, "stim_preprocessed.csv", row.names=FALSE)
+format_for_comp <- function(data) {
+  data$Sentence <- paste(data$Sentence, data$End, sep = " ")
+  data <- data %>% 
+    mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
+  return(data)
+}
+
+generate_filename <- function(l, b, m) {
+  return(paste("pcibex_lists/list", l, "_block", b, "_", m, ".csv", sep=""))
+}
+
+for (m in 1:2) {
+  for (l in 1:2) {
+    li <- filter(all, Group == l)
+    for (b in 1:4) {
+      block <- filter(li, Block == b)
+      if (m == 1) {
+        # blocks 1+2 will be comp, blocks 3+4 will be prod
+        if (b %in% 1:2) {
+          block <- format_for_comp(block)
+          # filename <- paste("list", l, "_block", b, "_comp", ".csv", sep="")
+          filename <- generate_filename(l, b, "comp")
+        } else {
+           # filename <- paste("list", l, "_block", b, "_prod", ".csv", sep="")         
+           filename <- generate_filename(l, b, "prod")
+        }
+      } else {
+        # blocks 1+2 will be prod, blocks 3+4 will be comp
+        if (b %in% 1:2) {
+          # filename <- paste("list", l+2, "_block", b, "_prod", ".csv", sep="") 
+          filename <- generate_filename(l+2, b, "prod")
+        } else {
+          block <- format_for_comp(block)
+          # filename <- paste("list", l+2, "_block", b, "_comp", ".csv", sep="")
+          filename <- generate_filename(l+2, b, "comp")
+        }
+      }
+      #filename <- paste("list", l, "_block", b, ".csv", sep="")
+      write.csv(block, filename, row.names=FALSE)
+      print(paste("Wrote to file:", filename, sep=" "))
+    }
+  }
+}
 ```
 
 
