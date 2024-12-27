@@ -38,7 +38,7 @@ def read_constraints(filename):
     if not os.path.isfile(filename):
         raise FileNotFoundError(
             f"\n\033[31mThe file '{filename}' needed to specify the "
-            "constraints does not exist in the current directory.\033[0m"
+            "constraints was not found in the current directory.\033[0m"
         )
 
     with open(filename, 'r') as file:
