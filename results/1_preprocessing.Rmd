@@ -1,5 +1,5 @@
 ---
-title: "RELIN results"
+title: "PCIbex results preprocessing"
 author: "Miriam Schulz"
 date: "2024-11-20"
 output:
@@ -80,7 +80,6 @@ df <- df[!df$UniqueID %in% c('SomeUniqueID'), ]  # remove subject(s)
 
 
 
-
 # Demographics
 
 ```{r}
@@ -146,29 +145,35 @@ write.csv(df.survey, "results_postexp_survey.csv", row.names=FALSE)
 Split into a production and a comprehension data set:
 
 ```{r}
-comp <- filter(df, Label == "comprehension")
+comp <- filter(df, Task == "Comprehension")
 comp$Newline. <- NULL
 comp$SentenceEnd <- NULL
-comp <- select(comp, 10:29)
+comp <- select(comp, 10:36)
+
 colnames(comp) <- c("WordPosition", "Word", "EventTime",
-                    "UniqueID", "LatinList", "Block",
+                    "UniqueID", "RandomOrder", "LatinList", "LatinListBinary",
+                    "TaskOrder", "BlocksReversed",
+                    "Block", "Task",
                     "ExpItemNum", "ExpItemType", "ExpCondition",
-                    "TargetPosition", "TargetWord", "TargetFreq",
+                    "TargetPosition", "TargetWord",
+                    "TargetFreq", "TargetLength", "ContextNoun",
                     #"SentenceEnd",
                     "TrialCounterGlobal", "TrialCounterComprehension",
                     "TargetAnswer", "QuestionText", "CorrectAnswer",
                     "RunningAccuracy",
                     "RT", "Sentence")
 
-
-prod <- filter(df, Label == "production")
+prod <- filter(df, Task == "Production")
 prod$Newline. <- NULL
 prod$RunningAccuracy <- NULL
-prod <- select(prod, 10:29)
+prod <- select(prod, 10:36)
 colnames(prod) <- c("WordPosition", "Word", "EventTime",
-                    "UniqueID", "LatinList", "Block",
+                    "UniqueID", "RandomOrder", "LatinList", "LatinListBinary",
+                    "TaskOrder", "BlocksReversed",
+                    "Block", "Task",
                     "ExpItemNum",  "ExpItemType", "ExpCondition",
-                    "TargetPosition", "TargetWord", "TargetFreq",
+                    "TargetPosition", "TargetWord",
+                    "TargetFreq", "TargetLength", "ContextNoun",
                     "SentenceEnd",
                     "TrialCounterGlobal", "TrialCounterComprehension",
                     "RecordingFilename", "ProductionTime", "ProductionTimeout",
@@ -184,8 +189,8 @@ colnames(prod) <- c("WordPosition", "Word", "EventTime",
 df.key <- df %>% filter(PennElementName == 'ComprehensionKey')
 df.key$TrialAccuracy <- ifelse(df.key$CorrectAnswer == "true", 1, 0)
 
-df.key.prac <- df.key %>% filter(Label == 'practice')
-df.key.trials <- df.key %>% filter(Label == 'comprehension')
+df.key.prac <- df.key %>% filter(Task == 'ExpPractice')
+df.key.trials <- df.key %>% filter(Task == 'Comprehension')
 
 # Completeness checks
 table(xtabs(~ UniqueID, df.key)) # comprehension trials + comprehension practice
@@ -218,6 +223,7 @@ Check the item-condition and item-condition-Latin square completeness:
 # Comprehension questions
 xtabs(~ ExpCondition + ExpItemNum, df.key.trials)
 xtabs(~ ExpCondition + ExpItemNum + LatinList, df.key.trials)
+xtabs(~ ExpCondition + ExpItemNum + RandomOrder, df.key.trials)
 
 # Recording filenames
 length(unique(prod$RecordingFilename))
@@ -237,6 +243,7 @@ summary(as.factor(prod.targets$ProductionTimeout))
 
 # Timeouts by subject 
 prod.timeouts <- xtabs(~ UniqueID + ProductionTimeout, prod.targets)#[, 2]
+#TODO redo the next two lines: this doesn't work if there is no timeout in df
 range(prod.timeouts[1,])
 hist(prod.timeouts,
      breaks=max(prod.timeouts),
