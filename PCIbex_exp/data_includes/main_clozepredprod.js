@@ -24,7 +24,7 @@ Sequence(
          "transition_comp",
          seq("comprehension1"),  // block 1 comprehension
          "minibreak_comp",
-         seq("comprehension2"),  // block 2 comprehension
+         // seq("comprehension2"),  // block 2 comprehension
 
          // Block transition
          "transition_blocks",
@@ -38,12 +38,12 @@ Sequence(
          "instructions_prod_final_example",
          "instructions_prod4",
          seq("practice_prod"),
-         "minibreak_prod",
+         "transition_prod",
          sepWith("sendAsync", seq("production1")),  // block 1 production
          "syncUpload",  // upload last trial TODO: necessary here?
-         "transition_miniblocks",
-         sepWith("sendAsync", seq("production2")),  // block 2 production
-         "syncUpload",  // upload last trial
+         "minibreak_prod",
+         // sepWith("sendAsync", seq("production2")),  // block 2 production
+         // "syncUpload",  // upload last trial
 
          // Post-experimental survey + send results
          "transition_survey",
@@ -764,7 +764,8 @@ Template(
     )
     // Basic trial information
     .log("LatinList", row.group)  //TODO update with the actual Latin list?
-    .log("Block", "ComprehensionPractice")
+    .log("Block", "Practice")
+    .log("Task", "ComprehensionPractice")
     .log("ExpItemNum", row.ItemNum)
     .log("ExpItemType", row.Type)
     .log("ExpCondition", row.ExpCondition)
@@ -869,7 +870,8 @@ Template(
     )
     // Basic trial information
     .log("LatinList", row.group)  //TODO update with the actual Latin list?
-    .log("Block", "ProductionPractice")
+    .log("Block", "Practice")
+    .log("Task", "ProductionPractice")
     .log("ExpItemNum", row.ItemNum)
     .log("ExpItemType", row.Type)
     .log("ExpCondition", row.ExpCondition)
@@ -1001,7 +1003,10 @@ Template("list1_block1_comp_pseudorandomized.csv", row =>
     )
     // Basic trial information
     .log("RandomOrder", row.Group)
-    .log("LatinList", row.Latin_list)
+    .log("LatinList", row.LatinList)
+    .log("LatinListBinary", row.LatinListBinary)
+    .log("TaskOrder", row.TaskOrder)
+    .log("BlocksReversed", row.BlocksReversed)
     .log("Block", row.Block)
     .log("Task", "Comprehension")
     .log("ExpItemNum", row.ItemNum)
@@ -1145,7 +1150,10 @@ Template("list1_block3_prod_pseudorandomized.csv", row =>
     )
     // Basic trial information
     .log("RandomOrder", row.Group)
-    .log("LatinList", row.Latin_list)
+    .log("LatinList", row.LatinList)
+    .log("LatinListBinary", row.LatinListBinary)
+    .log("TaskOrder", row.TaskOrder)
+    .log("BlocksReversed", row.BlocksReversed)
     .log("Block", row.Block)
     .log("Task", "Production")
     .log("ExpItemNum", row.ItemNum)
