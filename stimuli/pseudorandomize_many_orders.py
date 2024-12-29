@@ -143,8 +143,8 @@ def pseudorandomize(df,
         # Print in blue if recursion < 100, otherwise red
         font_color = "\033[1;34m" if recursion_depth < 100-1 else "\033[1;31m"
 
-        print("Pseudorandomization attempt no:   "
-              f"{font_color}{recursion_depth + 1}\033[0m", end="\r")
+        print(f"{font_color}Pseudorandomization attempt no:   "
+              f"{recursion_depth + 1}\033[0m", end="\r")
 
     return df_target
 
@@ -178,7 +178,7 @@ if __name__ == "__main__":
         if os.path.exists(out_filepath):
             os.remove(out_filepath)
 
-        print(f"\nPROCESSING FILE: {filename} (file no {f+1} / {len(files)})")
+        print(f"\nPROCESSING FILE: {filename} (FILE NO {f+1} / {len(files)})")
 
         # Generate r different random orders in each file
         for r in range(0, n_randomizations):
@@ -239,7 +239,8 @@ if __name__ == "__main__":
                                         max_depth=max_depth)
             df = df[~df["ItemNum"].isin(df_output["ItemNum"])]  # remove from df
 
-            print(f"\n\033[1;38;5;22mFinished pseudorandomizing {filename}, order no {current_group}.\033[0m")
+            print("\n\033[1;38;5;22mFinished pseudorandomizing order no  "
+                  f"{current_group}.\033[0m")
 
             # Save to CSV
             file_exists = os.path.exists(out_filepath)  # check if file exists
