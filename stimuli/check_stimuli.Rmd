@@ -326,6 +326,9 @@ Targets that appear 2x in the stimuli must be put in separate lists.
 The three targets that appear 3x each must be put in different lists but will inevitably occur twice in one list ('game', 'house', 'book').
 
 ```{r}
+# Check that no manually specified latin constraints are violated:
+summary(dat$Latin_constraints == dat$Latin_list)  # must all be TRUE or NA
+
 # The key constraints may specify an unequal distribution
 xtabs(~ cond + Latin_constraints, dat)
 
@@ -340,7 +343,8 @@ range(xtabs(~ item_id + cond, dat))
 # game, house and book:
 xtabs(~ target + Latin_list, dat)
 target_xtabs <- as.data.frame(xtabs(~ target + Latin_list, dat))
-target_xtabs[order(target_xtabs$Freq, target_xtabs$Latin_list), ]
+target_xtabs[order(target_xtabs$Freq, target_xtabs$Latin_list), ] %>%
+  filter(Freq > 1)
 ```
 
 
@@ -365,6 +369,9 @@ xtabs(~ Latin_list + Block_constraints, dat)
 # xtabs(~ Block_constraints + cond + Latin_list, dat)
 # xtabs(~ Block_constraints + HasQuestion + Latin_list, dat)
 # xtabs(~ Block_constraints + Answer + Latin_list, dat)
+
+# Check that no manually specified block constraints are violated:
+summary(dat$Block_constraints == dat$Block)  # must all be TRUE or NA
 ```
 
 But the final block distribution should be balanced with respect to the conditions and N questions in each block:
@@ -373,19 +380,26 @@ But the final block distribution should be balanced with respect to the conditio
 xtabs(~ Latin_list + Block, dat, addNA=T)
 xtabs(~ Block + cond + Latin_list, dat)
 
-# xtabs(~ Block + HasQuestion + Latin_list, dat)
+# Must contain 13-14 in first column and 6-7 in second column:
 xtabs(~ Block + HasQuestion, dat) / 2
+
+# Must contain 3-4 everywhere:
 xtabs(~ Block + Answer, dat) / 2
+
+# Should contain 1-2 everywhere:
 xtabs(~ Block + QuestionAbout, dat) / 2
+
+# Should contain 3-4 everywhere:
+xtabs(~ cond + Block + Latin_list, filter(dat, HasQuestion == "Yes"))
 ```
 
 Also check that the division of target and context nouns into blocks worked (in each Latin list, this should range from 0x to 1x max for each block):
 
 ```{r}
-# Targets: 
+# Targets (must range from 0 to 1): 
 range(xtabs(~ target + Block + Latin_list, dat))
 
-# Context nouns:
+# Context nouns (must range from 0 to 1):
 range(xtabs(~ W3 + Block + Latin_list, dat))
 ```
 
@@ -414,7 +428,11 @@ fillers$cond <- ifelse(fillers$Unexpected == "yes",
                        paste(fillers$FillerType, "Exp", sep="_"))
 fillers$QuestionAbout <- ifelse(fillers$QuestionAbout == "Adjective/Adverb",
                                 "Adjective", fillers$QuestionAbout)
+
+# Will show merged conditions (not an equal distribution)
 xtabs(~ cond, fillers)
+
+# Must show 6s or 4s in every column:
 xtabs(~ Block + cond, fillers)
 
 # Duplicate for Latin lists
@@ -431,9 +449,9 @@ xtabs(~ cond + Latin_list, all)
 xtabs(~ Block + cond + Latin_list, all)
 
 # Now these should all be balanced (in the columns):
-xtabs(~ Block + HasQuestion, all) / 2
-xtabs(~ Block + Answer, all) / 2
-xtabs(~ Block + QuestionAbout, all) / 2
+xtabs(~ Block + HasQuestion, all) / 2  # contain 26-27 and 13-14
+xtabs(~ Block + Answer, all) / 2  # contain 6s and 7s
+xtabs(~ Block + QuestionAbout, all) / 2 # contain 2s and 3s
 
 # Check in depth: cond + block + question + list; 
 # these should be balanced row-wise:
