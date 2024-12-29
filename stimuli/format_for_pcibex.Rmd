@@ -50,14 +50,17 @@ First, select the necessary columns.
 ### Preprocess items
 
 ```{r}
-dat <- rename(dat,  ItemNum = item_id)
-dat <- rename(dat,  TargetWord = target)
-dat <- rename(dat,  TargetLength = length)
-# dat <- rename(dat,  Group = Latin_list)
+dat <- rename(dat, ItemNum = item_id)
+dat <- rename(dat, TargetWord = target)
+dat <- rename(dat, TargetLength = length)
 dat$Group <- dat$Latin_list
+dat$LatinList <- dat$Latin_list
+dat <- rename(dat, LatinListBinary = Latin_list)
 dat$Type <- "ExpItem"
 dat <- rename(dat,  ExpCondition = cond)
 dat$TargetPosition <- 6
+dat$TaskOrder <- NA
+dat$BlocksReversed <- NA
 
 dat$Sentence <- paste(dat$W1, dat$W2, 
                               dat$W3, dat$W4,
@@ -71,7 +74,8 @@ dat <- rename(dat,  ContextNoun = W3)
 dat <- select(
   dat,
   c(
-    "Group", "Latin_list", "Block",
+    "Group", "LatinList", "LatinListBinary", "TaskOrder", "BlocksReversed",
+    "Block",
     "ItemNum",
     "Type", "ExpCondition",
     "Sentence", "End",
@@ -120,7 +124,8 @@ fillers$ExpCondition <- paste(fillers$ExpCondition, fillers$Unexpected, sep="_")
 # Add Latin list
 fillers <- rbind(fillers, fillers)
 fillers$Group <- rep(1:2, each = nrow(fillers)/2)
-fillers$Latin_list <- fillers$Group
+fillers$LatinList <- fillers$Group
+fillers$LatinListBinary <- fillers$Group
 
 fillers <- rename(fillers, End = Target)
 fillers$TargetPosition <- NA
@@ -130,11 +135,14 @@ fillers$TargetLength <- NA
 fillers$ContextNoun <- NA
 # fillers$overlap_t <- NA
 # fillers$overlap_c <- NA
+fillers$TaskOrder <- NA
+fillers$BlocksReversed <- NA
 
 fillers <- select(
   fillers,
   c(
-    "Group", "Latin_list", "Block",
+    "Group", "LatinList", "LatinListBinary", "TaskOrder", "BlocksReversed",
+    "Block",
     "ItemNum",
     "Type", "ExpCondition",
     "Sentence", "End",
@@ -198,47 +206,75 @@ intersect(context_nouns, target_nouns)
 Generate the other lists with a for loop and write to file:
 
 ```{r}
+trim_all_spaces <- function(data) {
+  data <- data %>% 
+    mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
+  data$Sentence <- trimws(data$Sentence, which = "both")
+  return(data)
+}
+
 # write.csv(all, "stim_preprocessed.csv", row.names=FALSE)
 format_for_comp <- function(data) {
   data$Sentence <- paste(data$Sentence, data$End, sep = " ")
-  data <- data %>% 
-    mutate(Sentence = gsub("\\s{2,}", " ", Sentence))
   return(data)
 }
 
 generate_filename <- function(l, b, m) {
   return(paste("pcibex_lists/list", l, "_block", b, "_", m, ".csv", sep=""))
 }
+```
 
-for (m in 1:2) {
-  for (l in 1:2) {
-    li <- filter(all, Group == l)
-    for (b in 1:4) {
-      block <- filter(li, Block == b)
-      if (m == 1) {
-        # blocks 1+2 will be comp, blocks 3+4 will be prod
-        if (b %in% 1:2) {
-          block <- format_for_comp(block)
-          # filename <- paste("list", l, "_block", b, "_comp", ".csv", sep="")
-          filename <- generate_filename(l, b, "comp")
-        } else {
-           # filename <- paste("list", l, "_block", b, "_prod", ".csv", sep="")         
-           filename <- generate_filename(l, b, "prod")
+```{r}
+all_copy <- all
+# Loop over the 2 block orderings
+for (bo in 1:2) {
+  all_copy$BlocksReversed <- ifelse(bo == 1, FALSE, TRUE)
+  if (bo == 2) {
+    all_copy$Block <- ifelse(all_copy$Block == 1, 3,
+                             ifelse(all_copy$Block == 2, 4,
+                                    ifelse(all_copy$Block == 3, 1,
+                                           ifelse(all_copy$Block == 4, 2,
+                                                  NA))))
+  }
+  # Loop over 2 mode orders: comp+prod vs. prod+comp
+  for (m in 1:2) {
+    all_copy$TaskOrder <- ifelse(m == 1, "comp_prod", "prod_comp")
+    # Loop over list conditions: High vs. Low
+    for (l in 1:2) {
+      li <- filter(all_copy, LatinListBinary == l)
+      # Loop over 4 blocks
+      for (b in 1:4) {
+        block <- filter(li, Block == b)
+        current_list <- l
+        # Chenge the blocks for the second block ordering
+        if (bo == 2) {
+          current_list <- current_list + 4
         }
-      } else {
-        # blocks 1+2 will be prod, blocks 3+4 will be comp
-        if (b %in% 1:2) {
-          # filename <- paste("list", l+2, "_block", b, "_prod", ".csv", sep="") 
-          filename <- generate_filename(l+2, b, "prod")
+        if (m == 1) {
+          block$LatinList <- current_list
+          # In mode 1, blocks 1+2 will be comp, blocks 3+4 will be prod
+          if (b %in% 1:2) {
+            block <- format_for_comp(block)
+            block <- trim_all_spaces(block)
+            filename <- generate_filename(current_list, b, "comp")
+          } else {
+            block <- trim_all_spaces(block)
+            filename <- generate_filename(current_list, b, "prod")
+          }
         } else {
-          block <- format_for_comp(block)
-          # filename <- paste("list", l+2, "_block", b, "_comp", ".csv", sep="")
-          filename <- generate_filename(l+2, b, "comp")
+          current_list <- current_list + 2
+          block$LatinList <- current_list
+          # In mode 2, blocks 1+2 will be prod, blocks 3+4 will be comp
+          if (b %in% 1:2) {
+            filename <- generate_filename(current_list, b, "prod")
+          } else {
+            block <- format_for_comp(block)
+            filename <- generate_filename(current_list, b, "comp")
+          }
         }
+        write.csv(block, filename, row.names=FALSE)
+        print(paste("Wrote to file:", filename, sep=" "))
       }
-      #filename <- paste("list", l, "_block", b, ".csv", sep="")
-      write.csv(block, filename, row.names=FALSE)
-      print(paste("Wrote to file:", filename, sep=" "))
     }
   }
 }
