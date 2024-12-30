@@ -143,6 +143,7 @@ check_filler_overlap <- function(item_nouns, filler_words) {
       print(w)
     }
   }
+  print("Finished checking fillers for overlap with the items.")
 }
 
 check_filler_overlap(noun_set, filler_words)
@@ -460,3 +461,47 @@ xtabs(~ cond + Block + Latin_list, filter(all, HasQuestion == "Yes"))
 xtabs(~ cond + Block + Latin_list, filter(all, HasQuestion == ""))
 ```
 
+
+## Check context priming for duplicate high cloze targets
+
+Check if there are two items in a block with the same predicted target, i.e., items that share a target and for which the two conditions were thus placed in a different list, but if one or both of these targets were the modal response in Cloze, presenting the context priming that target may still interfere with the other item that has this target.
+
+Check manually that the two items are in different blocks, at least when one or both of the targets is a  High Cloze target:
+
+```{r}
+# Check if there are any 2s in this:
+#xtabs(~ target + Block, dat)
+max(xtabs(~ target + Block, dat))
+
+# Check targets manually with a function (to also account for plurals
+# and to look at the exact block where each occurs):
+filter_items_with_target <- function(data, targetword) {
+  # x <- data %>% filter(target == targetword)
+  x <- data[grepl(targetword, data$target), ]
+  data <- data[data$item_id %in% x$item_id, ]
+  data <- data %>% select(c( 30:33, 1:12, 27:28))
+  cat(targetword, unique(data$Block))
+  return(data)
+}
+
+x <- filter_items_with_target(dat, "game")
+x <- filter_items_with_target(dat, "house")
+x <- filter_items_with_target(dat, "book")
+x <- filter_items_with_target(dat, "attention")
+x <- filter_items_with_target(dat, "award")
+x <- filter_items_with_target(dat, "cake")
+x <- filter_items_with_target(dat, "car")
+x <- filter_items_with_target(dat, "clothes")
+x <- filter_items_with_target(dat, "door")
+x <- filter_items_with_target(dat, "dress")
+x <- filter_items_with_target(dat, "flower")
+x <- filter_items_with_target(dat, "movie")
+x <- filter_items_with_target(dat, "news")
+x <- filter_items_with_target(dat, "pot")
+x <- filter_items_with_target(dat, "story")
+x <- filter_items_with_target(dat, "tree")
+x <- filter_items_with_target(dat, "water")
+x <- filter_items_with_target(dat, "weather")
+x <- filter_items_with_target(dat, "friend")
+x <- filter_items_with_target(dat, "student")
+```
