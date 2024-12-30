@@ -4,7 +4,7 @@
 
 
 PennController.ResetPrefix(null);
-DebugOff()
+// DebugOff()
 
 Sequence(
          "preload_trials",
@@ -74,7 +74,7 @@ CheckPreloaded()
 Header(
     // Define a global variable for debugging mode (true: 1, false: 0)
     // (this allows to print extra information during debugging)
-    newVar("DebugModeTrue", 1).global()
+    newVar("DebugModeTrue", 0).global()
     ,
     // Define a global variable to toggle recording mode on and off
     // (this allows the experiment to be occasionally tested w/o recording)
@@ -369,9 +369,8 @@ Template(
         newFunction("ResetBackgroundWhite", ()=>$("body").css("background-color", "white") ).call()
     )
     .setOption("hideProgressBar", true)
+    .log("TrialType", "Example")
 )
-.log("TrialType", "Example")
-
 
 // Bad example
 Template(
@@ -418,8 +417,8 @@ Template(
         newFunction("ResetBackgroundWhite", ()=>$("body").css("background-color", "white") ).call()
     )
     .setOption("hideProgressBar", true)
+    .log("TrialType", "Example")
 )
-.log("TrialType", "Example")
 
 // Final example
 Template(
@@ -459,9 +458,8 @@ Template(
         newFunction("ResetBackgroundWhite", ()=>$("body").css("background-color", "white") ).call()
     )
     .setOption("hideProgressBar", true)
+    .log("TrialType", "Example")
 )
-.log("TrialType", "Example")
-
 
 // Comprehension example
 Template(
@@ -537,7 +535,7 @@ Template(
         getCanvas("ComprehensionCanvasDecided")
             .add(50, 300,
                 newText("ContinueText", "Press Enter to continue.")
-                    .cssContainer({"font-size": "30px", "color": "blue"})
+                    .cssContainer({"font-size": "30px"})
                     // .print("center at 50vw", "middle at 60vh")
                     .print()
                     // .center()
@@ -548,8 +546,8 @@ Template(
             .wait()
       )
     .setOption("hideProgressBar", true)
+    .log("TrialType", "Example")
 )
-.log("TrialType", "Example")
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -777,8 +775,8 @@ Template(
     .log("TrialCounterBlock", "NA")
     // Comprehension trial information
     .log("TargetAnswer_RecordingFilename", row.Answer)
-    .log("QuestionText_ProductionTime", row.Question)
-    .log("CorrectAnswer_ProductionTimeout", getVar("CorrectAnswerVar"))
+    .log("CorrectAnswer_ProductionTime", getVar("CorrectAnswerVar"))
+    .log("QuestionText_ProductionTimeout", row.Question)
     .log("RunningAccuracy", getVar("RunningAccuracy"))
 )
 
@@ -883,8 +881,8 @@ Template(
     .log("TrialCounterBlock", "NA")
     // Production trial information
     .log("TargetAnswer_RecordingFilename", "NA")
-    .log("QuestionText_ProductionTime", getVar("ProductionTime"))
-    .log("CorrectAnswer_ProductionTimeout", getVar("ProductionTimeoutVar"))
+    .log("CorrectAnswer_ProductionTime", getVar("ProductionTime"))
+    .log("QuestionText_ProductionTimeout", getVar("ProductionTimeoutVar"))
     .log("RunningAccuracy", "NA")
 )
 
@@ -1022,8 +1020,8 @@ Template("list1_block1_comp_pseudorandomized.csv", row =>
     .log("TrialCounterBlock", getVar("TrialCounterComprehension"))
     // Comprehension trial information
     .log("TargetAnswer_RecordingFilename", row.Answer)
-    .log("QuestionText_ProductionTime", row.Question)
-    .log("CorrectAnswer_ProductionTimeout", getVar("CorrectAnswerVar"))
+    .log("CorrectAnswer_ProductionTime", getVar("CorrectAnswerVar"))
+    .log("QuestionText_ProductionTimeout", row.Question)
     .log("RunningAccuracy", getVar("RunningAccuracy"))
 )
 
@@ -1169,7 +1167,7 @@ Template("list1_block3_prod_pseudorandomized.csv", row =>
     .log("TrialCounterBlock", getVar("TrialCounterProduction"))
     // Production trial information
     .log("TargetAnswer_RecordingFilename", getVar("FileName"))
-    .log("QuestionText_ProductionTime", getVar("ProductionTime"))
-    .log("CorrectAnswer_ProductionTimeout", getVar("ProductionTimeoutVar"))
+    .log("CorrectAnswer_ProductionTime", getVar("ProductionTime"))
+    .log("QuestionText_ProductionTimeout", getVar("ProductionTimeoutVar"))
     .log("RunningAccuracy", "NA")
 )

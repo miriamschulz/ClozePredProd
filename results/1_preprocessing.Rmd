@@ -159,7 +159,7 @@ colnames(comp) <- c("WordPosition", "Word", "EventTime",
                     "TargetFreq", "TargetLength", "ContextNoun",
                     #"SentenceEnd",
                     "TrialCounterGlobal", "TrialCounterComprehension",
-                    "TargetAnswer", "QuestionText", "CorrectAnswer",
+                    "TargetAnswer", "CorrectAnswer", "QuestionText",
                     "RunningAccuracy",
                     "RT", "Sentence")
 
