@@ -27,14 +27,21 @@ library("tidyverse")
 
 
 ```{r}
-original <- read.csv("comprehension_l1.csv", header=TRUE)
-pseudorand <- read.csv("test_pseudorandomization.csv", header=TRUE)
+original <- read.csv("pcibex_lists/list1_block1_comp.csv", header=TRUE)
+pseudorand <- read.csv("pcibex_lists/list1_block1_comp_pseudorandomized.csv", header=TRUE)
 ```
 
 ```{r}
+n_orders <- 40
 nrow(original)
-nrow(pseudorand)
+nrow(pseudorand) / n_orders
 ```
+
+```{r}
+xtabs(~ ItemNum + Group, original)
+xtabs(~ ItemNum + Group, pseudorand)
+```
+
 
 ```{r}
 missing <- anti_join(original, pseudorand, by = "ItemNum")
