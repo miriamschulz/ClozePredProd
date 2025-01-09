@@ -4,7 +4,7 @@
 
 
 PennController.ResetPrefix(null);
-// DebugOff()
+DebugOff()
 
 Sequence(
          "preload_trials",
@@ -24,7 +24,7 @@ Sequence(
          "transition_comp",
          seq("comprehension1"),  // block 1 comprehension
          "minibreak_comp",
-         // seq("comprehension2"),  // block 2 comprehension
+         seq("comprehension2"),  // block 2 comprehension
 
          // Block transition
          "transition_blocks",
@@ -42,8 +42,8 @@ Sequence(
          sepWith("sendAsync", seq("production1")),  // block 1 production
          "syncUpload",  // upload last trial TODO: necessary here?
          "minibreak_prod",
-         // sepWith("sendAsync", seq("production2")),  // block 2 production
-         // "syncUpload",  // upload last trial
+         sepWith("sendAsync", seq("production2")),  // block 2 production
+         "syncUpload",  // upload last trial
 
          // Post-experimental survey + send results
          "transition_survey",
@@ -355,6 +355,9 @@ Template(
             .start()
             .wait()
         ,
+        // Reset the background color
+        newFunction("ResetBackgroundWhite", ()=>$("body").css("background-color", "white") ).call()
+        ,
         newText("ContinueText", "Press Enter to continue.")
             .cssContainer({"font-size": "30px"})
             .print("center at 50vw", "middle at 40vh")
@@ -364,9 +367,6 @@ Template(
         newKey("ContinueKey", "Enter")
             .wait()
             .log()
-        ,
-        // Reset the background color
-        newFunction("ResetBackgroundWhite", ()=>$("body").css("background-color", "white") ).call()
     )
     .setOption("hideProgressBar", true)
     .log("TrialType", "Example")
@@ -403,6 +403,9 @@ Template(
             .start()
             .wait()
         ,
+        // Reset the background color
+        newFunction("ResetBackgroundWhite", ()=>$("body").css("background-color", "white") ).call()
+        ,
         newText("ContinueText", "Press Enter to continue.")
             .cssContainer({"font-size": "30px"})
             .print("center at 50vw", "middle at 40vh")
@@ -412,9 +415,6 @@ Template(
         newKey("ContinueKey", "Enter")
             .wait()
             .log()
-        ,
-        // Reset the background color
-        newFunction("ResetBackgroundWhite", ()=>$("body").css("background-color", "white") ).call()
     )
     .setOption("hideProgressBar", true)
     .log("TrialType", "Example")
@@ -444,6 +444,9 @@ Template(
             .start()
             .wait()
         ,
+        // Reset the background color
+        newFunction("ResetBackgroundWhite", ()=>$("body").css("background-color", "white") ).call()
+        ,
         newText("ContinueText", "Press Enter to continue.")
             .cssContainer({"font-size": "30px"})
             .print("center at 50vw", "middle at 40vh")
@@ -453,9 +456,6 @@ Template(
         newKey("ContinueKey", "Enter")
             .wait()
             .log()
-        ,
-        // Reset the background color
-        newFunction("ResetBackgroundWhite", ()=>$("body").css("background-color", "white") ).call()
     )
     .setOption("hideProgressBar", true)
     .log("TrialType", "Example")
@@ -721,16 +721,16 @@ Template(
                                 ,
                                 getVar("CorrectAnswerVar").set( v => false )
                             )
-                    ,
-                    newTimer("showFeedbackTimer", 2000)
-                        .start()
-                        .wait()
-                    ,
-                    getCanvas("ComprehensionCanvasDecided").remove()
-                    ,
-                    getText("CorrectText").remove()
-                    ,
-                    getText("IncorrectText").remove()
+                    // ,
+                    // newTimer("showFeedbackTimer", 2000)
+                    //     .start()
+                    //     .wait()
+                    // ,
+                    // getCanvas("ComprehensionCanvasDecided").remove()
+                    // ,
+                    // getText("CorrectText").remove()
+                    // ,
+                    // getText("IncorrectText").remove()
                 )
         ,
         // Compute current accuracy (for debugging)
@@ -738,12 +738,27 @@ Template(
             .global()
             .set(getVar("ComprehensionAccuracyPracVar")).set(v=>v.filter(a=>a===true).length/v.length)
         ,
-        // Define the continuation text and key
         newText("ContinueText", "Press Enter to continue.")
             .cssContainer({"font-size": "30px"})
             .center()
             .italic()
-            .print("center at 50vw", "middle at 40vh")
+        ,
+        newText("HasQuestion2", row.HasQuestion)
+            .test.text("Yes")
+                .success(
+                    newTimer("showFeedbackTimer", 1000)
+                        .start()
+                        .wait()
+                    ,
+                    getText("ContinueText")
+                        // print below the accuracy feedback
+                        .print()
+                )
+                .failure(
+                    getText("ContinueText")
+                        // print in the middle of the screen
+                        .print("center at 50vw", "middle at 40vh")
+                )
         ,
         newKey("ContinueKey", "Enter")
         ,
@@ -893,7 +908,7 @@ Template(
 
 
 ////////////////////////////////////////////////////////////////////////////////
-//// Comprehension block
+//// Comprehension block 1
 Template("list1_block1_comp_pseudorandomized.csv", row =>
     newTrial("comprehension1",
 
@@ -1026,10 +1041,293 @@ Template("list1_block1_comp_pseudorandomized.csv", row =>
 )
 
 
+
 ////////////////////////////////////////////////////////////////////////////////
-// Production block
+//// Comprehension block 2
+Template("list1_block2_comp_pseudorandomized.csv", row =>
+    newTrial("comprehension2",
+
+        //// Initialize trial ////
+
+        getVar("TrialCounterGlobal").set(v => v + 1)  // Increase trial counter with each trial
+        ,
+
+        getVar("TrialCounterComprehension").set(v => v + 1)  // Increase trial counter with each trial
+        ,
+
+        //// Start trial ////
+
+        newController("DashedSentence", {s: row.Sentence, display: "in place", blankText: "#"})
+            .cssContainer({"font-family": "monospace", "font-size": "40px"})
+            .center()
+            .print("center at 50vw", "middle at 40vh")
+            .log()
+            .wait()
+            .remove()
+        ,
+        newText("ComprehensionQuestion", row.Question)
+        ,
+        newText("LeftText", "No")
+        ,
+        newText("RightText", "Yes")
+        ,
+        newCanvas("ComprehensionCanvas", 400,300)
+            .add("center at 50%", 20, getText("ComprehensionQuestion").italic().cssContainer({"font-family": "monospace",  "font-size": "25px"}))
+            .add(30, 150, newText("Key F").cssContainer({"font-family": "monospace", "font-size": "20px", "padding": "20px 10px 10px 10px"}))
+            .add(300,150, newText("Key J").cssContainer({"font-family": "monospace", "font-size": "20px", "padding": "20px 10px 10px 10px"}))
+            .add(30, 200, getText("LeftText").bold().cssContainer(
+                {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 20px 10px 20px"}))
+            .add(300,200, getText("RightText").bold().cssContainer(
+                {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 12px 10px 12px"}))
+            .center()
+        ,
+        newKey("ComprehensionKey", "FJ")
+        ,
+        // Define a variable to store whether the current answer is true/false
+        // or "NA" if the trial is not followed by any comprehension question
+        newVar("CorrectAnswerVar").global().set( v => "NA" )
+        ,
+        newText("HasQuestion", row.HasQuestion)
+            .test.text("Yes")
+                .success(
+                    getCanvas("ComprehensionCanvas")
+                        .log()
+                        .print()
+                    ,
+                    getKey("ComprehensionKey")
+                        .wait()
+                        .log()
+                        .test.pressed(row.AnswerKey)
+                            .success(
+                                getVar("ComprehensionAccuracyVar").set(v=>[...v,true])
+                                ,
+                                getVar("CorrectAnswerVar").set( v => true )
+                            )
+                            .failure(
+                                getVar("ComprehensionAccuracyVar").set(v=>[...v,false])
+                                ,
+                                getVar("CorrectAnswerVar").set( v => false )
+                            )
+
+                    ,
+                    getCanvas("ComprehensionCanvas").remove()
+                )
+        ,
+        // Compute current accuracy (for debugging)
+        newVar("RunningAccuracy")
+            .global()
+            .set(getVar("ComprehensionAccuracyVar")).set(v=>v.filter(a=>a===true).length/v.length)
+        ,
+        // Define the continuation text and key
+        newText("ContinueText", "Press Enter to continue.")
+            .cssContainer({"font-size": "30px"})
+            .center()
+            .italic()
+            .print("center at 50vw", "middle at 40vh")
+        ,
+        newKey("ContinueKey", "Enter")
+        ,
+        // Print running accuracy (displayed in debug mode only)
+        getVar("DebugModeTrue")
+            .test.is(1)
+            .success(
+                getText("HasQuestion")
+                    .test.text("Yes")
+                    .success(
+                        getKey("ComprehensionKey")
+                            .test.pressed(row.AnswerKey)
+                                .success(newText("Correct!").cssContainer({"font-family": "monospace", "font-size": "25px", "padding": "10px 10px 10px 10px", "color": "green",  "font-weight": "bold"}).print())
+                                .failure(newText("Incorrect!").cssContainer({"font-family": "monospace", "font-size": "25px", "padding": "10px 10px 10px 10px", "color": "red",  "font-weight": "bold"}).print())
+                        ,
+                        newText("Current Accuracy (displayed in debug mode only):").print()
+                        ,
+                        newText("RunningAccuracyText").text(getVar("RunningAccuracy"))
+                            .print()
+                    )
+            )
+        ,
+        getKey("ContinueKey")
+            .wait()
+    )
+    // Basic trial information
+    .log("RandomOrder", row.Group)
+    .log("LatinList", row.LatinList)
+    .log("LatinListBinary", row.LatinListBinary)
+    .log("TaskOrder", row.TaskOrder)
+    .log("BlocksReversed", row.BlocksReversed)
+    .log("Block", row.Block)
+    .log("Task", "Comprehension")
+    .log("ExpItemNum", row.ItemNum)
+    .log("ExpItemType", row.Type)
+    .log("ExpCondition", row.ExpCondition)
+    .log("TargetPosition", row.TargetPosition)
+    .log("TargetWord", row.TargetWord)
+    .log("TargetFreq", row.Lg10WF)
+    .log("TargetLength", row.TargetLength)
+    .log("ContextNoun", row.ContextNoun)
+    .log("SentenceEnd", row.End)
+    .log("TrialCounterGlobal", getVar("TrialCounterGlobal"))
+    .log("TrialCounterBlock", getVar("TrialCounterComprehension"))
+    // Comprehension trial information
+    .log("TargetAnswer_RecordingFilename", row.Answer)
+    .log("CorrectAnswer_ProductionTime", getVar("CorrectAnswerVar"))
+    .log("QuestionText_ProductionTimeout", row.Question)
+    .log("RunningAccuracy", getVar("RunningAccuracy"))
+)
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Production block 1
 Template("list1_block3_prod_pseudorandomized.csv", row =>
     newTrial("production1",
+
+        //// Initialize trial ////
+
+        getVar("TrialCounterGlobal").set(v => v + 1)  // Increase trial counter with each trial
+        ,
+        getVar("TrialCounterProduction").set(v => v + 1)  // Increase trial counter with each trial
+        ,
+        newVar("ProductionTimeoutVar").global().set( v => "NoTimeOut" )
+        ,
+        filename = "recorder_"+id+"_"+row.ItemNum+"_"+row.ExpCondition
+        ,
+        getVar("FileName").set( filename )
+        ,
+
+        //// Start trial ////
+
+        newController("DashedSentence", {s: row.Sentence, display: "in place", blankText: "#"})
+            .cssContainer({"font-family": "monospace", "font-size": "40px"})
+            .center()
+            .print("center at 50vw", "middle at 40vh")
+            .log()
+            .wait()
+            .remove()
+        ,
+        // Change the background color to blue as a production cue
+        newFunction("BlueBackground", ()=>$("body").css("background-color", "rgba(173, 216, 230, 0.5)") ).call()
+        ,
+        getVar("RecordModeTrue")
+            .test.is(1)
+            .failure(
+                newText("ContinueTextNoRecord", "Press Enter to continue.")
+                    // .cssContainer({"font-size": "30px", "line-height": "270%"})
+                    .cssContainer({"font-size": "30px"})
+                    .print("center at 50vw", "middle at 40vh")
+                    .center()
+                    .italic()
+                ,
+                newKey("ContinueKeyNoRecord", "Enter")
+                    .wait()
+                    .log()
+            )
+            .success(
+                newMediaRecorder(filename, "audio")
+                    .record()
+                ,
+                newVar("ProductionTime").global().set( v => Date.now() )  // start timer
+                ,
+                // newTimer("minRecordTimer", 1000).start().wait()  // prevents participants from just clicking through
+                // ,
+                newKey("StopRecordingKey", "Enter")
+                    .log()
+                    // .wait()
+                    .callback(
+                        getTimer("ProductionTimeoutTimer").stop()
+                    )
+                ,
+                newTimer("ProductionTimeoutTimer", 4000)  // production timer: 4
+                    .start()
+                    .wait()
+                ,
+                getVar("ProductionTime").set(v => Date.now() - v) // Calculate the elapsed time
+                ,
+                getKey("StopRecordingKey")
+                    .test.pressed()  // test if the key was pressed at all (not true if timer elapsed first)
+                        .failure(
+                            getVar("ProductionTimeoutVar").set(v => "TimedOut" )
+                        )
+                ,
+                // Append 1sec to each recording to capture cut-off ends
+                newTimer("RecordingSpilloverTimer", 1000)
+                    .start()
+                    .callback(
+                        getMediaRecorder(filename)
+                            .stop()
+                    )
+                ,
+                // In debug mode only: print production time and add an extra Enter key
+                getVar("DebugModeTrue")
+                    .test.is(1)
+                    .success(
+                        // Reset background color
+                        newFunction("ResetBackgroundWhiteDebug", ()=>$("body").css("background-color", "white") ).call()
+                        ,
+                        newText("Production time (displayed in debug mode only, in ms):")
+                            .print()
+                        ,
+                        newText("ProdTimeText").text(getVar("ProductionTime"))
+                            .print()
+                    )
+            )
+        ,
+        // Reset the background color at the end of the trial
+        newFunction("ResetBackgroundWhite", ()=>$("body").css("background-color", "white") ).call()
+        ,
+        getVar("ProductionTimeoutVar")
+            .test.is("TimedOut")
+                .success(
+                  newText("ProductionTimeoutMessage", "<b>Too slow!</b><br>Remember to finish the sentence with about 1 to 2 words<br>when the screen turns blue and to press <b>ENTER</b> when done.")
+                      .cssContainer({"color": "red", "font-size": "25px"})
+                      .print()
+                  ,
+                  newTimer("DummyTimer", 1000)
+                      .start()
+                      .wait()
+                )
+        ,
+        newText("ContinueText", "Press Enter to continue.")
+            .cssContainer({"font-size": "30px"})
+            .print("center at 50vw", "middle at 40vh")
+            .center()
+            .italic()
+        ,
+        newKey("ContinueKey", "Enter")
+            .wait()
+            .log()
+    )
+    // Basic trial information
+    .log("RandomOrder", row.Group)
+    .log("LatinList", row.LatinList)
+    .log("LatinListBinary", row.LatinListBinary)
+    .log("TaskOrder", row.TaskOrder)
+    .log("BlocksReversed", row.BlocksReversed)
+    .log("Block", row.Block)
+    .log("Task", "Production")
+    .log("ExpItemNum", row.ItemNum)
+    .log("ExpItemType", row.Type)
+    .log("ExpCondition", row.ExpCondition)
+    .log("TargetPosition", row.TargetPosition)
+    .log("TargetWord", row.TargetWord)
+    .log("TargetFreq", row.Lg10WF)
+    .log("TargetLength", row.TargetLength)
+    .log("ContextNoun", row.ContextNoun)
+    .log("SentenceEnd", row.End)
+    .log("TrialCounterGlobal", getVar("TrialCounterGlobal"))
+    .log("TrialCounterBlock", getVar("TrialCounterProduction"))
+    // Production trial information
+    .log("TargetAnswer_RecordingFilename", getVar("FileName"))
+    .log("CorrectAnswer_ProductionTime", getVar("ProductionTime"))
+    .log("QuestionText_ProductionTimeout", getVar("ProductionTimeoutVar"))
+    .log("RunningAccuracy", "NA")
+)
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Production block 2
+Template("list1_block4_prod_pseudorandomized.csv", row =>
+    newTrial("production2",
 
         //// Initialize trial ////
 
