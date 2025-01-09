@@ -19,12 +19,12 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 This script compares the pseudorandomized file produced by `pseudorandomize.py` with the original items file.
 
 
+# Compare the randomized and original file
 
 ```{r, message=FALSE}
 rm(list = ls())
 library("tidyverse")
 ```
-
 
 ```{r}
 original <- read.csv("pcibex_lists/list1_block1_comp.csv", header=TRUE)
@@ -41,7 +41,6 @@ nrow(pseudorand) / n_orders
 xtabs(~ ItemNum + Group, original)
 xtabs(~ ItemNum + Group, pseudorand)
 ```
-
 
 ```{r}
 missing <- anti_join(original, pseudorand, by = "ItemNum")

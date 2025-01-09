@@ -722,7 +722,7 @@ Template(
                                 getVar("CorrectAnswerVar").set( v => false )
                             )
                     ,
-                    newTimer("showFeedbackTimer", 1000)
+                    newTimer("showFeedbackTimer", 2000)
                         .start()
                         .wait()
                     ,
@@ -761,7 +761,7 @@ Template(
             .wait()
     )
     // Basic trial information
-    .log("LatinList", row.group)  //TODO update with the actual Latin list?
+    .log("LatinList", row.group)
     .log("Block", "Practice")
     .log("Task", "ComprehensionPractice")
     .log("ExpItemNum", row.ItemNum)
@@ -867,7 +867,7 @@ Template(
             .log()
     )
     // Basic trial information
-    .log("LatinList", row.group)  //TODO update with the actual Latin list?
+    .log("LatinList", row.group)
     .log("Block", "Practice")
     .log("Task", "ProductionPractice")
     .log("ExpItemNum", row.ItemNum)
