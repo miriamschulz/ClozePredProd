@@ -1,5 +1,5 @@
 ---
-title: "PCIbex results preprocessing"
+title: "Data preprocessing"
 author: "Miriam Schulz"
 date: "2024-11-20"
 output:
@@ -26,6 +26,7 @@ What this script does:
 - calculate by-participant and overall production RTs
 - summary of demographics
 - summary of post-experimental survey
+- export preprocessed data as `results_preprocessed.csv`
 
 
 # Read PCIbex results
@@ -73,6 +74,7 @@ Read data frame:
 
 ```{r}
 df <- read.pcibex('results_dev.csv')
+# df <- read.pcibex('results.csv')
 #check <- df %>% filter(UniqueID=="NULL")
 df <- unique(df)
 df <- df[!df$UniqueID %in% c('SomeUniqueID'), ]  # remove subject(s)
@@ -97,7 +99,7 @@ df.demogs <- df.demogs %>%
 
 # Make all variables factors and then age numeric
 df.demogs[] <- lapply(df.demogs, tolower)
-df.demogs[] <- lapply(df.demogs, as.factor)
+df.demogs[-2] <- lapply(df.demogs[-2], as.factor)
 df.demogs$Age <- as.numeric(df.demogs$Age)
 
 #summary(df.demogs)
@@ -145,40 +147,33 @@ write.csv(df.survey, "results_postexp_survey.csv", row.names=FALSE)
 Split into a production and a comprehension data set:
 
 ```{r}
+df$Value <- gsub('%2C', ',', df$Value)   # commas instead of %2C
+df$Comments <- gsub('%2C', ',', df$Comments)   # commas instead of %2C
+
+new_colnames <- c("WordPosition", "Word", "EventTime", "UniqueID",
+                  "RandomOrder", "LatinList", "LatinListBinary",
+                  "TaskOrder", "BlocksReversed",
+                  "Block", "Task",
+                  "ExpItemNum", "ExpItemType", "ExpCondition",
+                  "TargetPosition", "TargetWord",
+                  "TargetFreq", "TargetLength", "ContextNoun",
+                  "SentenceEnd",
+                  "TrialCounterGlobal", "TrialCounterTask",
+                  "AnswerTime",
+                  "TargetAnswer", "QuestionText", "CorrectAnswer",
+                  "RunningAccuracy", "ProductionTimeout", "RecordingFilename",
+                  "RT", "Sentence")
+
 comp <- filter(df, Task == "Comprehension")
 comp$Newline. <- NULL
-comp$SentenceEnd <- NULL
-comp <- select(comp, 10:36)
-
-colnames(comp) <- c("WordPosition", "Word", "EventTime",
-                    "UniqueID", "RandomOrder", "LatinList", "LatinListBinary",
-                    "TaskOrder", "BlocksReversed",
-                    "Block", "Task",
-                    "ExpItemNum", "ExpItemType", "ExpCondition",
-                    "TargetPosition", "TargetWord",
-                    "TargetFreq", "TargetLength", "ContextNoun",
-                    #"SentenceEnd",
-                    "TrialCounterGlobal", "TrialCounterComprehension",
-                    "TargetAnswer", "CorrectAnswer", "QuestionText",
-                    "RunningAccuracy",
-                    "RT", "Sentence")
+comp <- select(comp, 10:40)
+colnames(comp) <- new_colnames
 
 prod <- filter(df, Task == "Production")
 prod$Newline. <- NULL
-prod$RunningAccuracy <- NULL
-prod <- select(prod, 10:36)
-colnames(prod) <- c("WordPosition", "Word", "EventTime",
-                    "UniqueID", "RandomOrder", "LatinList", "LatinListBinary",
-                    "TaskOrder", "BlocksReversed",
-                    "Block", "Task",
-                    "ExpItemNum",  "ExpItemType", "ExpCondition",
-                    "TargetPosition", "TargetWord",
-                    "TargetFreq", "TargetLength", "ContextNoun",
-                    "SentenceEnd",
-                    "TrialCounterGlobal", "TrialCounterComprehension",
-                    "RecordingFilename", "ProductionTime", "ProductionTimeout",
-                    #"RunningAccuracy",
-                    "RT", "Sentence")
+prod <- select(prod, 10:40)
+colnames(prod) <- new_colnames
+
 ```
 
 
@@ -194,7 +189,7 @@ df.key.trials <- df.key %>% filter(Task == 'Comprehension')
 
 # Completeness checks
 table(xtabs(~ UniqueID, df.key)) # comprehension trials + comprehension practice
-table(xtabs(~ UniqueID, df.key.trials))  # should equal N of comprehension trials
+table(xtabs(~ UniqueID, df.key.trials))  # should equal N of comp trials with Q
 
 # Acc for all trials
 df.acc.subj <- df.key %>%
@@ -219,6 +214,8 @@ mean(df.acc.subj$Accuracy)
 
 Check the item-condition and item-condition-Latin square completeness:
 
+[TODO: this must be done for the production data too!]
+
 ```{r}
 # Comprehension questions
 xtabs(~ ExpCondition + ExpItemNum, df.key.trials)
@@ -236,7 +233,7 @@ length(unique(prod$RecordingFilename))
 # Mean production time and task RT
 prod.targets <- filter(prod, WordPosition == TargetPosition)
 
-mean(as.numeric(prod.targets$ProductionTime))
+mean(as.numeric(prod.targets$AnswerTime))
 
 # N of timeouts during production (> 4 sec)
 summary(as.factor(prod.targets$ProductionTimeout))
@@ -251,23 +248,65 @@ hist(prod.timeouts,
 ```
 
 
+## Question answer time
+
+```{r}
+# Mean production time and task RT
+comp.targets <- filter(comp, WordPosition == TargetPosition)
+mean(as.numeric(comp.targets$AnswerTime))
+hist(comp.targets$AnswerTime,
+     breaks=30,
+     col='steelblue')
+```
+
+
 ## RTs (superficial first check)
 
 ```{r}
-comp.targets <- filter(comp, WordPosition == TargetPosition)
 comp.targets$RT <- as.numeric(comp.targets$RT)
 prod.targets$RT <- as.numeric(prod.targets$RT)
+
 mean(comp.targets$RT)
 mean(prod.targets$RT)
 
 comp.targets %>%
-  group_by(ExpCondition) %>%
-  summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
+  dplyr::group_by(ExpCondition) %>%
+  dplyr::summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
   print()
 
 prod.targets %>%
-  group_by(ExpCondition) %>%
-  summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
+  dplyr::group_by(ExpCondition) %>%
+  dplyr::summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
   print()
+```
+
+
+# Export
+
+```{r}
+# Combine
+all <- rbind(comp, prod)
+all$Sentence <- gsub('%2C', ',', all$Sentence)   # commas instead of %2C
+
+# Reorder
+new_colnames <- c("EventTime", "UniqueID",
+                  "RandomOrder", "LatinList", "LatinListBinary",
+                  "TrialCounterGlobal", "TrialCounterTask",
+                  "TaskOrder", "BlocksReversed",
+                  "Block", "Task",
+                  "ExpItemNum", "ExpItemType", "ExpCondition",
+                  "WordPosition", "Word", "TargetWord",
+                  "RT", "AnswerTime",
+                  "TargetPosition", 
+                  "TargetFreq", "TargetLength", "ContextNoun",
+                  "TargetAnswer", "CorrectAnswer", "RunningAccuracy",
+                  "QuestionText",
+                  "ProductionTimeout",
+                  "RecordingFilename",
+                  "Sentence", "SentenceEnd")
+all.export <- all[, new_colnames]
+
+# Export
+write.csv(all.export, "results_preprocessed.csv", row.names=FALSE)
 ```
 

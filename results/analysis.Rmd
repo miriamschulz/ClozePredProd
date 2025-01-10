@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Preliminaries
 
-```{r}
+```{r, message = FALSE}
 # Preliminaries
 rm(list = ls())
 library(tidyverse)
@@ -42,16 +42,15 @@ Read data:
 
 ```{r}
 # Read preprocessed dfs
-comp <- read.csv("comp_preprocessed.csv", header=TRUE)
-prod <- read.csv("prod_preprocessed.csv", header=TRUE)
+dat <- read.csv("results_preprocessed.csv", header=TRUE)
 ```
 
 
 RT first check:
 
 ```{r}
-comp.targets <- extract_targets(comp)
-prod.targets <- extract_targets(prod)
+comp.targets <- dat %>% filter(Task == "Comprehension") %>% extract_targets()
+prod.targets <- dat %>% filter(Task == "Production") %>% extract_targets()
 ```
 
 
@@ -234,7 +233,6 @@ ggsave("./plots/results_plot_byitem.png", plot = last_plot(), width=6, height=10
 
 # Model
 
-
 ```{r}
 colnames(prod.targets) <- colnames(comp.targets)
 all <- rbind(comp.targets, prod.targets)
@@ -247,9 +245,7 @@ contrasts(all$Expectancy) <- c(-0.5, 0.5)
 all$Task <- as.factor(all$Task)
 contrasts(all$Task) <- c(-0.5, 0.5)
 
-# m <- lmer(log(RT) ~ Expectancy + Task + (1 | Item),
-#           data=all)
-m <- lm(log(RT) ~ Expectancy + Task,
+m <- lm(log(RT) ~ Expectancy * Task,
           data=all)
 
 summary(m)
