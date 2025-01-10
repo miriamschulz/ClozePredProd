@@ -635,7 +635,7 @@ Template(
                 {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 20px 10px 20px"}))
             .add(300,200, getText("RightText").bold().cssContainer(
                 {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 12px 10px 12px"}))
-            .center()
+            // .center()
         ,
         newKey("ComprehensionKey", "FJ")
         ,
@@ -648,7 +648,8 @@ Template(
                 .success(
                     getCanvas("ComprehensionCanvas")
                         .log()
-                        .print()
+                        // .print()
+                        .print("center at 50vw", "middle at 40vh")
                     ,
                     getKey("ComprehensionKey")
                         .wait()
@@ -671,8 +672,9 @@ Template(
                                                 .add(300,150, getText("RightKeyText").cssContainer({"font-family": "monospace", "font-size": "20px",  "color": "black", "padding": "20px 10px 10px 10px"}))
                                                 .add(30, 200, getText("LeftText").bold().cssContainer( {"font-family": "monospace", "font-size": "30px", "border": "solid 1px green", "padding": "10px 20px 10px 20px", "color": "green"}))
                                                 .add(300,200, getText("RightText").bold().cssContainer({"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 12px 10px 12px", "color": "black"}))
-                                                .center()
-                                                .print()
+                                                // .center()
+                                                // .print()
+                                                .print("center at 50vw", "middle at 40vh")
                                         )
                                         .failure(
                                             getCanvas("ComprehensionCanvasDecided")
@@ -681,11 +683,14 @@ Template(
                                                 .add(300,150, getText("RightKeyText").cssContainer({"font-family": "monospace", "font-size": "20px",  "color": "green", "padding": "20px 10px 10px 10px"}))
                                                 .add(30 ,200, getText("LeftText").bold().cssContainer( {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 20px 10px 20px", "color": "black"}))
                                                 .add(300,200, getText("RightText").bold().cssContainer({"font-family": "monospace", "font-size": "30px", "border": "solid 1px green", "padding": "10px 12px 10px 12px", "color": "green"}))
-                                                .center()
-                                                .print()
+                                                // .center()
+                                                // .print()
+                                                .print("center at 50vw", "middle at 40vh")
                                         )
                                 ,
-                                newText("CorrectText", "Correct!").cssContainer({"font-family": "monospace", "font-size": "25px", "padding": "10px 10px 10px 10px", "color": "green",  "font-weight": "bold"}).print()
+                                newText("CorrectText", "Correct!").cssContainer({"font-family": "monospace", "font-size": "25px", "padding": "10px 10px 10px 10px", "color": "green",  "font-weight": "bold"})
+                                    // .print()
+                                    .print("center at 50vw", "middle at 57vh")
                                 ,
                                 getVar("ComprehensionAccuracyPracVar").set(v=>[...v,true])
                                 ,
@@ -701,8 +706,9 @@ Template(
                                                 .add(300,150, getText("RightKeyText").cssContainer({"font-family": "monospace", "font-size": "20px",  "color": "black", "padding": "20px 10px 10px 10px"}))
                                                 .add(30, 200, getText("LeftText").bold().cssContainer( {"font-family": "monospace", "font-size": "30px", "border": "solid 1px red", "padding": "10px 20px 10px 20px", "color": "red"}))
                                                 .add(300,200, getText("RightText").bold().cssContainer({"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 12px 10px 12px", "color": "black"}))
-                                                .center()
-                                                .print()
+                                                // .center()
+                                                // .print()
+                                                .print("center at 50vw", "middle at 40vh")
                                         )
                                         .failure(
                                             getCanvas("ComprehensionCanvasDecided")
@@ -711,11 +717,14 @@ Template(
                                                 .add(300,150, getText("RightKeyText").cssContainer({"font-family": "monospace", "font-size": "20px",  "color": "red", "padding": "20px 10px 10px 10px"}))
                                                 .add(30 ,200, getText("LeftText").bold().cssContainer( {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 20px 10px 20px", "color": "black"}))
                                                 .add(300,200, getText("RightText").bold().cssContainer({"font-family": "monospace", "font-size": "30px", "border": "solid 1px red", "padding": "10px 12px 10px 12px", "color": "red"}))
-                                                .center()
-                                                .print()
+                                                // .center()
+                                                // .print()
+                                                .print("center at 50vw", "middle at 40vh")
                                         )
                                 ,
-                                newText("IncorrectText", "Incorrect!").cssContainer({"font-family": "monospace", "font-size": "25px", "padding": "10px 10px 10px 10px", "color": "red",  "font-weight": "bold"}).print()
+                                newText("IncorrectText", "Incorrect!").cssContainer({"font-family": "monospace", "font-size": "25px", "padding": "10px 10px 10px 10px", "color": "red",  "font-weight": "bold"})
+                                    // .print()
+                                    .print("center at 50vw", "middle at 57vh")
                                 ,
                                 getVar("ComprehensionAccuracyPracVar").set(v=>[...v,false])
                                 ,
@@ -752,7 +761,8 @@ Template(
                     ,
                     getText("ContinueText")
                         // print below the accuracy feedback
-                        .print()
+                        // .print()
+                        .print("center at 50vw", "middle at 63vh")
                 )
                 .failure(
                     getText("ContinueText")
@@ -944,7 +954,7 @@ Template("list1_block1_comp_pseudorandomized.csv", row =>
                 {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 20px 10px 20px"}))
             .add(300,200, getText("RightText").bold().cssContainer(
                 {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 12px 10px 12px"}))
-            .center()
+            // .center()
         ,
         newKey("ComprehensionKey", "FJ")
         ,
@@ -957,7 +967,8 @@ Template("list1_block1_comp_pseudorandomized.csv", row =>
                 .success(
                     getCanvas("ComprehensionCanvas")
                         .log()
-                        .print()
+                        // .print()
+                        .print("center at 50vw", "middle at 40vh")
                     ,
                     getKey("ComprehensionKey")
                         .wait()
@@ -1079,7 +1090,7 @@ Template("list1_block2_comp_pseudorandomized.csv", row =>
                 {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 20px 10px 20px"}))
             .add(300,200, getText("RightText").bold().cssContainer(
                 {"font-family": "monospace", "font-size": "30px", "border": "solid 1px black", "padding": "10px 12px 10px 12px"}))
-            .center()
+            // .center()
         ,
         newKey("ComprehensionKey", "FJ")
         ,
@@ -1092,7 +1103,8 @@ Template("list1_block2_comp_pseudorandomized.csv", row =>
                 .success(
                     getCanvas("ComprehensionCanvas")
                         .log()
-                        .print()
+                        // .print()
+                        .print("center at 50vw", "middle at 40vh")                        
                     ,
                     getKey("ComprehensionKey")
                         .wait()
