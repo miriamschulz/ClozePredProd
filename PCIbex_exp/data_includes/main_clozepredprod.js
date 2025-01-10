@@ -643,6 +643,8 @@ Template(
         // or "NA" if the trial is not followed by any comprehension question
         newVar("CorrectAnswerVar").global().set( v => "NA" )
         ,
+        newVar("AnswerTime").global().set( v => Date.now() )  // start timer
+        ,
         newText("HasQuestion", row.HasQuestion)
             .test.text("Yes")
                 .success(
@@ -742,6 +744,8 @@ Template(
                     // getText("IncorrectText").remove()
                 )
         ,
+        getVar("AnswerTime").set(v => Date.now() - v) // Calculate the elapsed time
+        ,
         // Compute current accuracy (for debugging)
         newVar("RunningAccuracy")
             .global()
@@ -786,7 +790,11 @@ Template(
             .wait()
     )
     // Basic trial information
-    .log("LatinList", row.group)
+    .log("RandomOrder", "NA")
+    .log("LatinList", "NA")
+    .log("LatinListBinary", "NA")
+    .log("TaskOrder", "NA")
+    .log("BlocksReversed", "NA")
     .log("Block", "Practice")
     .log("Task", "ComprehensionPractice")
     .log("ExpItemNum", row.ItemNum)
@@ -795,16 +803,20 @@ Template(
     .log("TargetPosition", row.TargetPosition)
     .log("TargetWord", row.TargetWord)
     .log("TargetFreq", row.Lg10WF)
+    .log("TargetLength", "NA")
+    .log("ContextNoun", "NA")
     .log("SentenceEnd", row.End)
     .log("TrialCounterGlobal", getVar("TrialCounterGlobal"))
     .log("TrialCounterBlock", "NA")
     // Comprehension trial information
-    .log("TargetAnswer_RecordingFilename", row.Answer)
-    .log("CorrectAnswer_ProductionTime", getVar("CorrectAnswerVar"))
-    .log("QuestionText_ProductionTimeout", row.Question)
+    .log("AnswerTime", getVar("AnswerTime"))
+    .log("TargetAnswer", row.Answer)
+    .log("QuestionText", row.Question)
+    .log("CorrectAnswer", getVar("CorrectAnswerVar"))
     .log("RunningAccuracy", getVar("RunningAccuracy"))
+    .log("ProductionTimeout", "NA")
+    .log("RecordingFilename", "NA")
 )
-
 
 ////////////////////////////////////////////////////////////////////////////////
 //// Production practice
@@ -892,7 +904,11 @@ Template(
             .log()
     )
     // Basic trial information
-    .log("LatinList", row.group)
+    .log("RandomOrder", "NA")
+    .log("LatinList", "NA")
+    .log("LatinListBinary", "NA")
+    .log("TaskOrder", "NA")
+    .log("BlocksReversed", "NA")
     .log("Block", "Practice")
     .log("Task", "ProductionPractice")
     .log("ExpItemNum", row.ItemNum)
@@ -901,14 +917,19 @@ Template(
     .log("TargetPosition", row.TargetPosition)
     .log("TargetWord", row.TargetWord)
     .log("TargetFreq", row.Lg10WF)
+    .log("TargetLength", "NA")
+    .log("ContextNoun", "NA")
     .log("SentenceEnd", row.End)
     .log("TrialCounterGlobal", getVar("TrialCounterGlobal"))
     .log("TrialCounterBlock", "NA")
     // Production trial information
-    .log("TargetAnswer_RecordingFilename", "NA")
-    .log("CorrectAnswer_ProductionTime", getVar("ProductionTime"))
-    .log("QuestionText_ProductionTimeout", getVar("ProductionTimeoutVar"))
+    .log("AnswerTime", getVar("ProductionTime"))
+    .log("TargetAnswer", "NA")
+    .log("QuestionText", "NA")
+    .log("CorrectAnswer", "NA")
     .log("RunningAccuracy", "NA")
+    .log("ProductionTimeout", getVar("ProductionTimeoutVar"))
+    .log("RecordingFilename", "NA")
 )
 
 
@@ -962,6 +983,8 @@ Template("list1_block1_comp_pseudorandomized.csv", row =>
         // or "NA" if the trial is not followed by any comprehension question
         newVar("CorrectAnswerVar").global().set( v => "NA" )
         ,
+        newVar("AnswerTime").global().set( v => Date.now() )  // start timer
+        ,
         newText("HasQuestion", row.HasQuestion)
             .test.text("Yes")
                 .success(
@@ -988,6 +1011,8 @@ Template("list1_block1_comp_pseudorandomized.csv", row =>
                     ,
                     getCanvas("ComprehensionCanvas").remove()
                 )
+        ,
+        getVar("AnswerTime").set(v => Date.now() - v) // Calculate the elapsed time
         ,
         // Compute current accuracy (for debugging)
         newVar("RunningAccuracy")
@@ -1045,10 +1070,13 @@ Template("list1_block1_comp_pseudorandomized.csv", row =>
     .log("TrialCounterGlobal", getVar("TrialCounterGlobal"))
     .log("TrialCounterBlock", getVar("TrialCounterComprehension"))
     // Comprehension trial information
-    .log("TargetAnswer_RecordingFilename", row.Answer)
-    .log("CorrectAnswer_ProductionTime", getVar("CorrectAnswerVar"))
-    .log("QuestionText_ProductionTimeout", row.Question)
+    .log("AnswerTime", getVar("AnswerTime"))
+    .log("TargetAnswer", row.Answer)
+    .log("QuestionText", row.Question)
+    .log("CorrectAnswer", getVar("CorrectAnswerVar"))
     .log("RunningAccuracy", getVar("RunningAccuracy"))
+    .log("ProductionTimeout", "NA")
+    .log("RecordingFilename", "NA")
 )
 
 
@@ -1098,13 +1126,15 @@ Template("list1_block2_comp_pseudorandomized.csv", row =>
         // or "NA" if the trial is not followed by any comprehension question
         newVar("CorrectAnswerVar").global().set( v => "NA" )
         ,
+        newVar("AnswerTime").global().set( v => Date.now() )  // start timer
+        ,
         newText("HasQuestion", row.HasQuestion)
             .test.text("Yes")
                 .success(
                     getCanvas("ComprehensionCanvas")
                         .log()
                         // .print()
-                        .print("center at 50vw", "middle at 40vh")                        
+                        .print("center at 50vw", "middle at 40vh")
                     ,
                     getKey("ComprehensionKey")
                         .wait()
@@ -1124,6 +1154,8 @@ Template("list1_block2_comp_pseudorandomized.csv", row =>
                     ,
                     getCanvas("ComprehensionCanvas").remove()
                 )
+        ,
+        getVar("AnswerTime").set(v => Date.now() - v) // Calculate the elapsed time
         ,
         // Compute current accuracy (for debugging)
         newVar("RunningAccuracy")
@@ -1181,10 +1213,13 @@ Template("list1_block2_comp_pseudorandomized.csv", row =>
     .log("TrialCounterGlobal", getVar("TrialCounterGlobal"))
     .log("TrialCounterBlock", getVar("TrialCounterComprehension"))
     // Comprehension trial information
-    .log("TargetAnswer_RecordingFilename", row.Answer)
-    .log("CorrectAnswer_ProductionTime", getVar("CorrectAnswerVar"))
-    .log("QuestionText_ProductionTimeout", row.Question)
+    .log("AnswerTime", getVar("AnswerTime"))
+    .log("TargetAnswer", row.Answer)
+    .log("QuestionText", row.Question)
+    .log("CorrectAnswer", getVar("CorrectAnswerVar"))
     .log("RunningAccuracy", getVar("RunningAccuracy"))
+    .log("ProductionTimeout", "NA")
+    .log("RecordingFilename", "NA")
 )
 
 
@@ -1329,10 +1364,13 @@ Template("list1_block3_prod_pseudorandomized.csv", row =>
     .log("TrialCounterGlobal", getVar("TrialCounterGlobal"))
     .log("TrialCounterBlock", getVar("TrialCounterProduction"))
     // Production trial information
-    .log("TargetAnswer_RecordingFilename", getVar("FileName"))
-    .log("CorrectAnswer_ProductionTime", getVar("ProductionTime"))
-    .log("QuestionText_ProductionTimeout", getVar("ProductionTimeoutVar"))
+    .log("AnswerTime", getVar("ProductionTime"))
+    .log("TargetAnswer", "NA")
+    .log("QuestionText", "NA")
+    .log("CorrectAnswer", "NA")
     .log("RunningAccuracy", "NA")
+    .log("ProductionTimeout", getVar("ProductionTimeoutVar"))
+    .log("RecordingFilename", getVar("FileName"))
 )
 
 
@@ -1476,8 +1514,11 @@ Template("list1_block4_prod_pseudorandomized.csv", row =>
     .log("TrialCounterGlobal", getVar("TrialCounterGlobal"))
     .log("TrialCounterBlock", getVar("TrialCounterProduction"))
     // Production trial information
-    .log("TargetAnswer_RecordingFilename", getVar("FileName"))
-    .log("CorrectAnswer_ProductionTime", getVar("ProductionTime"))
-    .log("QuestionText_ProductionTimeout", getVar("ProductionTimeoutVar"))
+    .log("AnswerTime", getVar("ProductionTime"))
+    .log("TargetAnswer", "NA")
+    .log("QuestionText", "NA")
+    .log("CorrectAnswer", "NA")
     .log("RunningAccuracy", "NA")
+    .log("ProductionTimeout", getVar("ProductionTimeoutVar"))
+    .log("RecordingFilename", getVar("FileName"))
 )
