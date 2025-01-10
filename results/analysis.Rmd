@@ -1,0 +1,260 @@
+---
+title: "Analysis"
+author: "Miriam Schulz"
+date: "2025-01-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Preliminaries
+
+```{r}
+# Preliminaries
+rm(list = ls())
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(Rmisc)
+library(lme4)
+```
+
+
+```{r}
+extract_targets <- function(df) {
+  df <- filter(df, WordPosition == TargetPosition)
+  df$RT <- as.numeric(df$RT)
+  df$ExpCondition <- as.factor(df$ExpCondition)
+  print(mean(df$RT))
+  df %>%
+    dplyr::group_by(ExpCondition) %>%
+    dplyr::summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
+    print()
+  return(df)
+}
+```
+
+
+Read data:
+
+```{r}
+# Read preprocessed dfs
+comp <- read.csv("comp_preprocessed.csv", header=TRUE)
+prod <- read.csv("prod_preprocessed.csv", header=TRUE)
+```
+
+
+RT first check:
+
+```{r}
+comp.targets <- extract_targets(comp)
+prod.targets <- extract_targets(prod)
+```
+
+
+Completeness checks:
+
+```{r}
+xtabs(~ ExpCondition, comp.targets)
+xtabs(~ ExpCondition, prod.targets)
+```
+
+
+
+# Outlier elimination
+
+Check for outliers:
+
+```{r}
+hist(comp.targets$RT, breaks=25)
+hist(prod.targets$RT, breaks=25)
+
+range(comp.targets$RT)
+range(prod.targets$RT)
+
+sort(comp.targets$RT)
+```
+
+Remove trials with extreme RTs:
+
+```{r}
+remove_outliers <- function(df) {
+  df <- filter(df, RT > 80 & RT < 2500)
+  return(df)
+}
+```
+
+```{r}
+comp.targets <- remove_outliers(comp.targets)
+prod.targets <- remove_outliers(prod.targets)
+```
+
+
+
+# Plots
+
+Plot by condition with confidence intervals:
+
+```{r}
+# Generate a summary data frame including the SE for each task:
+comp.plot <- summarySE(comp.targets,
+                     measurevar="RT",
+                     groupvars=c("ExpCondition"),
+                     na.rm=T)
+prod.plot <- summarySE(prod.targets,
+                     measurevar="RT",
+                     groupvars=c("ExpCondition"),
+                     na.rm=T)
+
+# Determine maximal value for y-axis:
+max_y <- max(c(comp.plot$RT + comp.plot$se, prod.plot$RT + prod.plot$se))
+
+# Plot:
+p.comp <- ggplot(data=comp.plot,
+       aes(ExpCondition, RT)) + 
+  geom_bar(aes(fill=ExpCondition),
+           stat="identity",
+           width=1,
+           show.legend=TRUE) +
+  geom_errorbar(aes(ymin = RT-se, ymax = RT+se),
+              width=0.1, linewidth=0.3) +
+  xlab("Condition") +
+  ylab("Reading Time (ms)") +
+  ggtitle("Comprehension") +
+  scale_fill_manual(values=c("steelblue", "forestgreen")) +
+  ylim(0, max_y) +
+  theme_minimal() + 
+  theme(
+      axis.title.x = element_text(size = 14, face = 'bold'),
+      axis.title.y = element_text(size = 14, face = 'bold'),
+      axis.text.x = element_text(size = 12, face = 'bold', color = 'black'),
+      axis.text.y = element_text(size = 12, color = 'black'),
+      plot.title = element_text(size = 25, face = 'bold'),
+      legend.position = "none")
+
+
+p.prod <- ggplot(data=prod.plot,
+       aes(ExpCondition, RT)) + 
+  geom_bar(aes(fill=ExpCondition),
+           stat="identity",
+           width=1,
+           show.legend=TRUE) +
+  geom_errorbar(aes(ymin = RT-se, ymax = RT+se),
+              width=0.1, linewidth=0.3) +
+  xlab("Condition") +
+  ylab("Reading Time (ms)") +
+  ggtitle("Production") +
+  scale_fill_manual(values=c("steelblue", "forestgreen")) +
+  ylim(0, max_y) +
+  theme_minimal() +
+  theme(
+      axis.title.x = element_text(size = 14, face = 'bold'),
+      axis.title.y = element_text(size = 14, face = 'bold'),
+      axis.text.x = element_text(size = 12, face = 'bold', color = 'black'),
+      axis.text.y = element_text(size = 12, color = 'black'),
+      plot.title = element_text(size = 25, face = 'bold'),
+      legend.position = "none")
+
+# Print plots:
+p <- grid.arrange(p.comp, p.prod, ncol = 2)
+p
+ggsave("./plots/RTs.png", plot = p, width=8, height=5, dpi=320)
+```
+
+
+Check individual differences: by subject plots 
+
+```{r, eval=FALSE}
+df$LatinList <- as.factor(df$LatinList)
+df.plot.subj <- summarySE(df,                               # name of dataframe
+                          measurevar="ConstantProducedFirst", # measure of interest 
+                          groupvars=c("UniqueID", "Condition", "LatinList"), # grouping variables  
+                          #conf.interval = 0.95,
+                          na.rm=T)
+
+ggplot(data = df.plot.subj,
+       aes(Condition, ConstantProducedFirst)) +
+  geom_bar(aes(fill = LatinList),
+           stat = "identity",
+           width = 0.7,
+           show.legend = TRUE) +
+  #geom_errorbar(aes(ymin = ConstantProducedFirst-ci, ymax = ConstantProducedFirst+ci),
+  #             width=0.1, linewidth=0.3) +
+  facet_wrap(~ UniqueID) + 
+  ylim(0, 1) +
+  ylab("% constant first") +
+  scale_fill_manual(values=c("red3", "forestgreen", "steelblue2", "red", "lightgreen", "lightblue")) +
+  theme_minimal() + 
+  theme(#panel.grid = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_line(color = 'black', size = 0.2),
+        panel.grid.minor.y = element_blank(),
+        legend.position = "none"
+  )
+ggsave("./plots/results_plot_bysubj_latin.png", plot = last_plot(), width=6, height=10, dpi=320)
+```
+
+
+Check item differences: by item plots 
+
+```{r, eval=FALSE}
+df.plot.item <- summarySE(df,                               # name of dataframe
+                          measurevar="ConstantProducedFirst", # measure of interest 
+                          groupvars=c("ItemNum", "Condition"), # grouping variables  
+                          #conf.interval = 0.95,
+                          na.rm=T)
+
+ggplot(data = df.plot.item,
+       aes(Condition, ConstantProducedFirst)) +
+  geom_bar(aes(fill = Condition),
+           stat = "identity",
+           width = 0.7,
+           show.legend = TRUE) +
+  #geom_errorbar(aes(ymin = ConstantProducedFirst-ci, ymax = ConstantProducedFirst+ci),
+  #             width=0.1, linewidth=0.3) +
+  facet_wrap(~ ItemNum) + 
+  ylim(0, 1) +
+  ylab("% constant first") +
+  scale_fill_manual(values=c("red3", "forestgreen", "steelblue2")) +
+  theme_minimal() + 
+  theme(#panel.grid = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_line(color = 'black', size = 0.2),
+        panel.grid.minor.y = element_blank(),
+        legend.position = "none"
+  )
+ggsave("./plots/results_plot_byitem.png", plot = last_plot(), width=6, height=10, dpi=320)
+```
+
+
+# Model
+
+
+```{r}
+colnames(prod.targets) <- colnames(comp.targets)
+all <- rbind(comp.targets, prod.targets)
+all$Item <- as.factor(all$ExpItemNum)
+all$Subject <- as.factor(all$UniqueID)
+
+all$Expectancy <- as.factor(all$ExpCondition)
+contrasts(all$Expectancy) <- c(-0.5, 0.5)
+
+all$Task <- as.factor(all$Task)
+contrasts(all$Task) <- c(-0.5, 0.5)
+
+# m <- lmer(log(RT) ~ Expectancy + Task + (1 | Item),
+#           data=all)
+m <- lm(log(RT) ~ Expectancy + Task,
+          data=all)
+
+summary(m)
+
+# anova(m2, m3)
+# summary(rePCA(m2))
+```
+
