@@ -40,7 +40,7 @@ Sequence(
          seq("practice_prod"),
          "transition_prod",
          sepWith("sendAsync", seq("production1")),  // block 1 production
-         "syncUpload",  // upload last trial TODO: necessary here?
+         "syncUpload",  // upload last trial
          "minibreak_prod",
          sepWith("sendAsync", seq("production2")),  // block 2 production
          "syncUpload",  // upload last trial
@@ -798,7 +798,7 @@ Template(
     .log("Block", "Practice")
     .log("Task", "ComprehensionPractice")
     .log("ExpItemNum", row.ItemNum)
-    .log("ExpItemNumOriginal", row.ItemNumOriginal)
+    .log("ExpItemNumOriginal", "NA")
     .log("ExpItemType", row.Type)
     .log("ExpCondition", row.ExpCondition)
     .log("TargetPosition", "NA")
@@ -914,7 +914,7 @@ Template(
     .log("Block", "Practice")
     .log("Task", "ProductionPractice")
     .log("ExpItemNum", row.ItemNum)
-    .log("ExpItemNumOriginal", row.ItemNumOriginal)
+    .log("ExpItemNumOriginal", "NA")
     .log("ExpItemType", row.Type)
     .log("ExpCondition", row.ExpCondition)
     .log("TargetPosition", "NA")

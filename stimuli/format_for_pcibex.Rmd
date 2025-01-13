@@ -302,14 +302,17 @@ prac <- rename(prac,  End = Target)
 prac$Sentence <- ifelse(prac$ExpCondition == "prac_comprehension",
                         paste(prac$Sentence, prac$End, sep = " "),
                         prac$Sentence)
-    
+
+prac$AnswerKey <- ifelse(prac$Answer == "FALSE", "F",
+                         ifelse(prac$Answer == "TRUE", "J", ""))
+
 prac <- select(
   prac,
   c("Group", "Block", "ItemNum",
     "Type", "ExpCondition",
     "Sentence", "End",
     #"TargetPosition", "TargetWord", "Lg10WF",
-    "HasQuestion", "Question", "Answer"
+    "HasQuestion", "Question", "Answer", "AnswerKey"
   )
 )
 

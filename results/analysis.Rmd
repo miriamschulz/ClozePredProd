@@ -27,7 +27,7 @@ library(lme4)
 Custom functions:
 
 ```{r}
-extract_targets <- function(df) {
+extract_regions <- function(df) {
   df <- filter(df, WordPosition %in% c("5", "6", "7", "8"))
   df <- filter(df, ExpItemType == "ExpItem")
   df$RT <- as.numeric(df$RT)
@@ -41,7 +41,12 @@ extract_targets <- function(df) {
 }
 
 remove_outliers <- function(df) {
+  nrow_orig <- nrow(df)
   df <- filter(df, RT > 80 & RT < 2500)
+  nrow_new <- nrow(df)
+  nrow_diff <- nrow_orig-nrow_new
+  cat("Number of data points eliminated:", nrow_diff, "out of", nrow_orig)
+  cat("  (", nrow_diff / nrow_orig * 100, "%)", sep="")
   return(df)
 }
 ```
@@ -55,10 +60,10 @@ dat <- read.csv("results_preprocessed.csv", header=TRUE)
 ```
 
 
-RT first check:
+Extract critical regions & first check of mean RT by condition:
 
 ```{r}
-dat <- extract_targets(dat)
+dat <- extract_regions(dat)
 ```
 
 
@@ -88,6 +93,18 @@ Remove trials with extreme RTs:
 dat <- remove_outliers(dat)
 ```
 
+
+# Accuracy, answer time and production time
+
+TODO:
+
+- check accuracy by subject
+- basic plot for comprehension question RT (histogram + by condition) 
+- and for production timeouts (including fillers!?)
+
+```{r}
+hist(dat$AnswerTime, breaks=25, col="steelblue")
+```
 
 
 # Plots
@@ -200,12 +217,18 @@ contrasts(dat$Expectancy) <- c(-0.5, 0.5)
 dat$Task <- as.factor(dat$Task)
 contrasts(dat$Task) <- c(-0.5, 0.5)
 dat$logRT <- log(dat$RT)
+dat$ClozeCentered <- scale(dat$ClozeProb)
 
 #TODO: residualize for word length + frequency?
 
 # Baby LM with binary Expectancy predictor:
 summary(lm(logRT ~ Expectancy * Task + TargetLength + TargetFreq,
            data = filter(dat, WordPosition == TargetPosition)))
+
+# Baby LM with binary Expectancy predictor:
+m_target <- lm(logRT ~ ClozeCentered * Task + TargetLength + TargetFreq,
+           data = filter(dat, WordPosition == TargetPosition))
+summary(m_target)
 
 # anova(m2, m3)
 # summary(rePCA(m2))

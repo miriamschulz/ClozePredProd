@@ -77,9 +77,11 @@ df <- read.pcibex('results_dev.csv')
 # df <- read.pcibex('results.csv')
 #check <- df %>% filter(UniqueID=="NULL")
 df <- unique(df)
-df <- df[!df$UniqueID %in% c('SomeUniqueID'), ]  # remove subject(s)
-```
 
+df <- df[!df$UniqueID %in% c('4lchm0'), ]  # remove subject(s)
+#summary(as.factor(df$UniqueID))
+# df %>% filter(Parameter == "Age") %>% select(Value)  # check that no 999 (me)
+```
 
 
 # Demographics
@@ -154,8 +156,9 @@ new_colnames <- c("WordPosition", "Word", "EventTime", "UniqueID",
                   "RandomOrder", "LatinList", "LatinListBinary",
                   "TaskOrder", "BlocksReversed",
                   "Block", "Task",
-                  "ExpItemNum", "ExpItemType", "ExpCondition",
-                  "TargetPosition", "TargetWord",
+                  "ExpItemNum", "ExpItemNumOriginal",
+                  "ExpItemType", "ExpCondition",
+                  "TargetPosition", "TargetWord", "ClozeProb",
                   "TargetFreq", "TargetLength", "ContextNoun",
                   "SentenceEnd",
                   "TrialCounterGlobal", "TrialCounterTask",
@@ -166,14 +169,13 @@ new_colnames <- c("WordPosition", "Word", "EventTime", "UniqueID",
 
 comp <- filter(df, Task == "Comprehension")
 comp$Newline. <- NULL
-comp <- select(comp, 10:40)
+comp <- select(comp, 10:42)
 colnames(comp) <- new_colnames
 
 prod <- filter(df, Task == "Production")
 prod$Newline. <- NULL
-prod <- select(prod, 10:40)
+prod <- select(prod, 10:42)
 colnames(prod) <- new_colnames
-
 ```
 
 
@@ -253,8 +255,10 @@ hist(prod.timeouts,
 ```{r}
 # Mean production time and task RT
 comp.targets <- filter(comp, WordPosition == TargetPosition)
-mean(as.numeric(comp.targets$AnswerTime))
-hist(comp.targets$AnswerTime,
+comp.targets$AnswerTime <- as.numeric(comp.targets$AnswerTime)
+mean(comp.targets$AnswerTime)
+comp.answertime <- comp.targets %>% filter(TargetAnswer %in% c("True", "False"))
+hist(comp.answertime$AnswerTime,
      breaks=30,
      col='steelblue')
 ```
@@ -294,8 +298,9 @@ new_colnames <- c("EventTime", "UniqueID",
                   "TrialCounterGlobal", "TrialCounterTask",
                   "TaskOrder", "BlocksReversed",
                   "Block", "Task",
-                  "ExpItemNum", "ExpItemType", "ExpCondition",
-                  "WordPosition", "Word", "TargetWord",
+                  "ExpItemNum", "ExpItemNumOriginal",
+                  "ExpItemType", "ExpCondition",
+                  "WordPosition", "Word", "TargetWord", "ClozeProb",
                   "RT", "AnswerTime",
                   "TargetPosition", 
                   "TargetFreq", "TargetLength", "ContextNoun",
