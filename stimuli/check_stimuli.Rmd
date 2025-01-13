@@ -372,7 +372,7 @@ xtabs(~ Latin_list + Block_constraints, dat)
 # xtabs(~ Block_constraints + Answer + Latin_list, dat)
 
 # Check that no manually specified block constraints are violated:
-summary(dat$Block_constraints == dat$Block)  # must all be TRUE or NA
+summary(dat$Block_constraints == dat$Block)  # must all be TRUE or NA [OUTDATED]
 ```
 
 But the final block distribution should be balanced with respect to the conditions and N questions in each block:
