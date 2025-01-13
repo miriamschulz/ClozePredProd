@@ -50,9 +50,13 @@ First, select the necessary columns.
 ### Preprocess items
 
 ```{r}
-dat <- rename(dat, ItemNum = item_id)
+dat <- rename(dat, ItemNumOriginal = item_id)
+dat <- dat %>% dplyr::arrange(as.numeric(ItemNumOriginal))
+n <- nrow(dat)/2
+dat$ItemNum <- rep(1:n, each=2)
 dat <- rename(dat, TargetWord = target)
 dat <- rename(dat, TargetLength = length)
+dat <- rename(dat, ClozeProb = cloze_prob)
 dat$Group <- dat$Latin_list
 dat$LatinList <- dat$Latin_list
 dat <- rename(dat, LatinListBinary = Latin_list)
@@ -76,10 +80,10 @@ dat <- select(
   c(
     "Group", "LatinList", "LatinListBinary", "TaskOrder", "BlocksReversed",
     "Block",
-    "ItemNum",
+    "ItemNum",  "ItemNumOriginal",
     "Type", "ExpCondition",
     "Sentence", "End",
-    "TargetPosition", "TargetWord", "Lg10WF", "TargetLength",
+    "TargetPosition", "TargetWord", "ClozeProb", "Lg10WF", "TargetLength",
     "ContextNoun",
     "HasQuestion", "Question", "Answer"
     #"overlap_t", "overlap_c"
@@ -116,6 +120,7 @@ fillers <- filter(fillers, ItemNum < 500)
 
 # Make the filler numbers higher: start at 1001
 fillers$ItemNum <- fillers$ItemNum + 1000
+fillers$ItemNumOriginal <- fillers$ItemNum
 
 # Append to the filler condition if something is unexpected
 fillers$Unexpected <- ifelse(fillers$Unexpected == "yes", "Unexp", "Exp")
@@ -137,16 +142,17 @@ fillers$ContextNoun <- NA
 # fillers$overlap_c <- NA
 fillers$TaskOrder <- NA
 fillers$BlocksReversed <- NA
+fillers$ClozeProb <- NA
 
 fillers <- select(
   fillers,
   c(
     "Group", "LatinList", "LatinListBinary", "TaskOrder", "BlocksReversed",
     "Block",
-    "ItemNum",
+    "ItemNum", "ItemNumOriginal",
     "Type", "ExpCondition",
     "Sentence", "End",
-    "TargetPosition", "TargetWord", "Lg10WF", "TargetLength",
+    "TargetPosition", "TargetWord", "ClozeProb", "Lg10WF", "TargetLength",
     "ContextNoun",
     "HasQuestion", "Question", "Answer"
     #"overlap_t", "overlap_c"
@@ -302,7 +308,7 @@ prac <- select(
   c("Group", "Block", "ItemNum",
     "Type", "ExpCondition",
     "Sentence", "End",
-    "TargetPosition", "TargetWord", "Lg10WF",
+    #"TargetPosition", "TargetWord", "Lg10WF",
     "HasQuestion", "Question", "Answer"
   )
 )
