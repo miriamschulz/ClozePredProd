@@ -29,7 +29,7 @@ Custom functions:
 ```{r}
 extract_regions <- function(df) {
   df <- filter(df, WordPosition %in% c("5", "6", "7", "8"))
-  df <- filter(df, ExpItemType == "ExpItem")
+  # df <- filter(df, ExpItemType == "ExpItem")
   df$RT <- as.numeric(df$RT)
   df$ExpCondition <- as.factor(df$ExpCondition)
   print(mean(df$RT))
@@ -57,6 +57,15 @@ Read data:
 ```{r}
 # Read preprocessed dfs
 dat <- read.csv("results_preprocessed.csv", header=TRUE)
+
+# dat_pilot3 <- read.csv("results_preprocessed_pilot3.csv", header=TRUE)
+# colnames(dat)
+# colnames(dat_pilot3)
+# dat_pilot3$ClozeProb <- NA
+# dat$ExpItemNum <- dat$ExpItemNumOriginal
+# dat$ExpItemNumOriginal <- NULL
+# dat_pilot3 <- dat_pilot3[, colnames(dat), drop = FALSE]
+# dat <- rbind(dat, dat_pilot3)
 ```
 
 
@@ -67,44 +76,118 @@ dat <- extract_regions(dat)
 ```
 
 
-Completeness checks:
+# Checks
+
+## Data completeness check
 
 ```{r}
+# Experimental trials
 xtabs(~ UniqueID + ExpCondition, filter(dat, WordPosition == TargetPosition))
+# Items
+xtabs(~ UniqueID + ExpItemNum, dat)
 ```
 
+
+## Comprehension question accuracy
+
+```{r}
+dat_acc <- dat %>% filter(!is.na(CorrectAnswer)) %>% filter(WordPosition == "6")
+dat_acc$TrialAccuracy <- ifelse(dat_acc$CorrectAnswer == "true", 1, 0)
+
+# Completeness checks
+table(xtabs(~ UniqueID, dat_acc)) # should equal N of comp trials with Q in the list & N subjects
+
+# Acc for all trials
+dat_acc_subj <- dat_acc %>%
+  dplyr::group_by(UniqueID) %>%
+  dplyr::summarize(Accuracy = mean(TrialAccuracy))
+dat_acc_subj
+round(range(dat_acc_subj$Accuracy), 2)
+mean(dat_acc_subj$Accuracy)
+```
+
+
+## Production timeouts
+
+Plot the number of production timeouts by participant:
+
+```{r}
+dat_Timeouts <- dat %>% 
+  filter(Task == "Production") %>% 
+  select(c("UniqueID", "ExpCondition", "ProductionTimeout", "ExpItemNum")) %>% 
+  unique()
+dat_Timeouts$ProductionTimeoutBinary <-
+  ifelse(dat_Timeouts$ProductionTimeout == "TimedOut", 1, 0)
+
+ggplot(data=dat_Timeouts,
+       aes(UniqueID, ProductionTimeoutBinary, fill=UniqueID)) + 
+  geom_bar(stat="identity",
+           width=1,
+           show.legend=FALSE) +
+  xlab("Subject") +
+  ylab("N Production Timeouts") +
+  ggtitle("Production Timeouts by Subject") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Pastel1") + 
+  theme(
+    axis.title.x = element_text(size = 14, face = 'bold'),
+    axis.title.y = element_text(size = 14, face = 'bold'),
+    axis.text.x = element_text(size = 12, face = 'bold'),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 25, face = 'bold')
+  )
+```
+
+
+## Question answer time
+
+Comprehension question Answer Time:
+
+```{r}
+dat_AnswerRTs <- dat %>%
+  filter(QuestionText != "")
+hist(dat_AnswerRTs$AnswerTime, breaks = 25, col="steelblue")
+
+# Filter out Answer Times shorter than 200ms and longer than 10s (arbitrary):
+dat_AnswerRTs <- dat_AnswerRTs %>%
+  filter(AnswerTime > 200 & AnswerTime < 10000)
+
+range(dat_AnswerRTs$AnswerTime)
+mean(dat_AnswerRTs$AnswerTime)
+sd(dat_AnswerRTs$AnswerTime)
+```
 
 
 # Outlier elimination
 
+To continue, split the data into all and experimental items only:
+
+```{r}
+dat_all <- dat
+dat <- dat %>% filter(dat$ExpItemType == "ExpItem")
+```
+
 Check for outliers:
 
 ```{r}
-hist(dat$RT, breaks=25, col="steelblue")
-
-range(dat$RT)
-
-# sort(dat$RT)
+dat_AnswerRTs <- dat %>%
+  filter(QuestionText != "")
+hist(dat_AnswerRTs$AnswerTime, breaks = 25, col="steelblue")
+range(dat_AnswerRTs$AnswerTime)
 ```
 
 Remove trials with extreme RTs:
 
 ```{r}
+# Items only:
 dat <- remove_outliers(dat)
+
+# All trials:
+dat_all <- remove_outliers(dat_all)
 ```
 
+TODO: additional outlier elimination by SD by participant.
 
-# Accuracy, answer time and production time
-
-TODO:
-
-- check accuracy by subject
-- basic plot for comprehension question RT (histogram + by condition) 
-- and for production timeouts (including fillers!?)
-
-```{r}
-hist(dat$AnswerTime, breaks=25, col="steelblue")
-```
 
 
 # Plots
@@ -115,16 +198,16 @@ Plot by condition with confidence intervals:
 
 ```{r}
 # Generate a summary data frame including the SE:
-dat.plot <- summarySE(filter(dat, WordPosition == TargetPosition),
+dat_plot <- summarySE(filter(dat, WordPosition == TargetPosition),
                       measurevar="RT",
                       groupvars=c("ExpCondition", "Task"),
                       na.rm=T)
 
 # Determine maximal value for y-axis:
-max_y <- max(c(dat.plot$RT + dat.plot$se))
+max_y <- max(c(dat_plot$RT + dat_plot$se))
 
 # Plot:
-ggplot(data=dat.plot,
+ggplot(data=dat_plot,
        aes(ExpCondition, RT, fill=ExpCondition)) + 
   geom_bar(aes(fill=ExpCondition),
            stat="identity",
@@ -141,14 +224,15 @@ ggplot(data=dat.plot,
   theme(
       axis.title.x = element_text(size = 14, face = 'bold'),
       axis.title.y = element_text(size = 14, face = 'bold'),
-      axis.text.x = element_text(size = 12, face = 'bold', color = 'black'),
-      axis.text.y = element_text(size = 12, color = 'black'),
+      axis.text.x = element_text(size = 12, face = 'bold'),
+      axis.text.y = element_text(size = 12),
       plot.title = element_text(size = 25, face = 'bold'),
       legend.position = "none",
       strip.text = element_text(size = 18, face = "bold")) + 
   facet_wrap(~Task)
 
-ggsave("./plots/RTs_target_barplot.png", plot = last_plot(), width=6, height=4, dpi=320)
+ggsave("./plots/RTs_target_barplot.png", plot = last_plot(),
+       width=6, height=4, dpi=320)
 ```
 
 
@@ -156,16 +240,15 @@ ggsave("./plots/RTs_target_barplot.png", plot = last_plot(), width=6, height=4, 
 
 ```{r}
 # Generate a summary data frame including the SE:
-#dat$WordPosition <- as.factor(dat$WordPosition)
-dat.plot <- summarySE(dat,
+dat_plot <- summarySE(dat,
                       measurevar="RT",
                       groupvars=c("WordPosition", "ExpCondition", "Task"),
                       na.rm=T)
-dat.plot$Region <- rep(c("pre-critical", "target", "spill1", "spill2"), each=4)
-dat.plot$Region <- factor(dat.plot$Region, levels=c("pre-critical", "target",
+dat_plot$Region <- rep(c("pre-critical", "target", "spill1", "spill2"), each=4)
+dat_plot$Region <- factor(dat_plot$Region, levels=c("pre-critical", "target",
                                                     "spill1", "spill2"))
 
-ggplot(data = dat.plot,
+ggplot(data = dat_plot,
        aes(x = Region,
            y = RT,
            color = ExpCondition,
@@ -184,27 +267,166 @@ ggplot(data = dat.plot,
   theme(
     axis.title.x = element_text(size = 14, face = "bold"),
     axis.title.y = element_text(size = 14, face = "bold"),
-    axis.text.x = element_text(size = 12, color = "black"),
-    axis.text.y = element_text(size = 12, color = "black"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
     plot.title = element_text(size = 20, face = "bold"),
     legend.title = element_text(size = 14),
     legend.text = element_text(size = 12),
     strip.text = element_text(size = 16, face = "bold")
   ) +
-  scale_color_manual(values = c("navy", "steelblue1"))  # Custom colors
+  scale_color_manual(values = c("navy", "steelblue1"))
 
-ggsave("./plots/RTs.png", plot = last_plot(), width=10, height=7, dpi=320)
+ggsave("./plots/RTs.png", plot = last_plot(),
+       width=10, height=7, dpi=320)
 ```
+
+
+## Line plot by subjects
+
+```{r}
+# Generate a summary data frame including the SE:
+#dat$WordPosition <- as.factor(dat$WordPosition)
+dat_plot <- summarySE(dat,
+                      measurevar="RT",
+                      groupvars=c("WordPosition", "ExpCondition",
+                                  "Task", "UniqueID"),
+                      na.rm=T)
+dat_plot$Region <- rep(c("pre-critical", "target", "spill1", "spill2"),
+                       each=nrow(dat_plot)/4)
+dat_plot$Region <- factor(dat_plot$Region, levels=c("pre-critical", "target",
+                                                    "spill1", "spill2"))
+
+ggplot(data = dat_plot,
+       aes(x = Region,
+           y = RT,
+           color = ExpCondition,
+           group = ExpCondition)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
+                width = 0.2, 
+                linewidth = 0.5) +
+  facet_wrap(~UniqueID+Task) +
+  labs(color = "Expectancy") +
+  xlab("Region") +
+  ylab("Reading Time (ms)") +
+  ggtitle("Reading Times by Region") +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold"),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold")
+  ) +
+  scale_color_manual(values = c("navy", "steelblue1"))
+
+ggsave("./plots/RTs_subjects.png", plot = last_plot(),
+       width=10, height=7, dpi=320)
+```
+
+
+## Line plot by item
+
+```{r}
+# Generate a summary data frame including the SE:
+dat_plot <- summarySE(dat,
+                      measurevar="RT",
+                      groupvars=c("WordPosition", "ExpCondition",
+                                  "Task", "ExpItemNum"),
+                      na.rm=T)
+dat_plot$Region <- rep(c("pre-critical", "target", "spill1", "spill2"),
+                       each=nrow(dat_plot)/4)
+dat_plot$Region <- factor(dat_plot$Region, levels=c("pre-critical", "target",
+                                                    "spill1", "spill2"))
+
+ggplot(data = dat_plot,
+       aes(x = Region,
+           y = RT,
+           color = ExpCondition,
+           group = ExpCondition)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
+                width = 0.2, 
+                linewidth = 0.5) +
+  facet_wrap(~ExpItemNum+Task) +
+  labs(color = "Expectancy") +
+  xlab("Region") +
+  ylab("Reading Time (ms)") +
+  ggtitle("Reading Times by Region") +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold"),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold")
+  ) +
+  scale_color_manual(values = c("navy", "steelblue1"))
+
+ggsave("./plots/RTs_items.png", plot = last_plot(),
+       width=20, height=20, dpi=320)
+```
+
+
+## RT over time plot
+
+Plot the RT over time (items and fillers; averaging across the 4 extracted regions).
+
+```{r}
+dat_plot <- summarySE(dat_all,
+                      measurevar="RT",
+                      groupvars=c("Block", "TrialCounterGlobal", "UniqueID"),
+                      na.rm=T)
+
+ggplot(data = dat_plot,
+       aes(x = TrialCounterGlobal,
+           y = RT,
+           color = UniqueID,
+           group = interaction(UniqueID, Block))) +
+  geom_smooth(method = "lm", se = TRUE, size = 1.2) +
+  # geom_line(size = 1) +
+  # geom_point(size = 2) +
+  labs(color = "Subject") +
+  xlab("Trial number") +
+  ylab("Reading Time (ms)") +
+  geom_vline(xintercept = 88, linetype = "dashed", color = "red", size = 1) +
+  annotate("text", x = 85, y = 520, #y = max(dat_plot$RT-100),
+           label = "Start 2nd block",
+           color = "red", angle = 90, hjust = -0.5) +
+  ggtitle("Reading Times by Block") +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold"),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold")
+  )
+
+ggsave("./plots/RTs_over_time.png", plot = last_plot(),
+       width=20, height=20, dpi=320)
+```
+
+
 
 ## More plots
 
 TODO: Make individual plots:
 
-- by subject
-- by item
 - by list?
 - by Block Order!
-- RT by time aka. trial number (+cond / +subject)
+
 
 
 # Model
@@ -212,25 +434,38 @@ TODO: Make individual plots:
 ```{r}
 dat$Item <- as.factor(dat$ExpItemNum)
 dat$Subject <- as.factor(dat$UniqueID)
-dat$Expectancy <- as.factor(dat$ExpCondition)
+dat$Expectancy <- droplevels(as.factor(dat$ExpCondition))
 contrasts(dat$Expectancy) <- c(-0.5, 0.5)
 dat$Task <- as.factor(dat$Task)
 contrasts(dat$Task) <- c(-0.5, 0.5)
 dat$logRT <- log(dat$RT)
-dat$ClozeCentered <- scale(dat$ClozeProb)
+dat$Cloze_c <- scale(dat$ClozeProb)
+dat$Length_c <- scale(dat$TargetLength)
+dat$Freq_c <- scale(dat$TargetFreq)
 
-#TODO: residualize for word length + frequency?
+#TODO: residualize for word length + frequency instead?
+#TODO: add precritical RT as predictor?
 
 # Baby LM with binary Expectancy predictor:
-summary(lm(logRT ~ Expectancy * Task + TargetLength + TargetFreq,
+summary(lm(logRT ~ Expectancy * Task + Length_c + Freq_c,
            data = filter(dat, WordPosition == TargetPosition)))
 
-# Baby LM with binary Expectancy predictor:
-m_target <- lm(logRT ~ ClozeCentered * Task + TargetLength + TargetFreq,
+# Target region
+m_target <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
+                   (1 | Subject) + (1 | Item),
            data = filter(dat, WordPosition == TargetPosition))
 summary(m_target)
 
-# anova(m2, m3)
-# summary(rePCA(m2))
+# Spillover 1
+m_spill1 <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
+                   (1 | Subject) + (1 | Item),
+           data = filter(dat, WordPosition == TargetPosition+1))
+summary(m_spill1)
+
+# Spillover 2
+m_spill2 <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
+                   (1 | Subject) + (1 | Item),
+           data = filter(dat, WordPosition == TargetPosition+2))
+summary(m_spill2)
 ```
 
