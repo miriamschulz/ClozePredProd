@@ -73,9 +73,30 @@ print_RTs <- function(df) {
     print()
 }
 
-remove_outliers <- function(df) {
+remove_outliers_thresholds <- function(df, min_rt = 80, max_rt = 2500) {
   nrow_orig <- nrow(df)
-  df <- filter(df, RT > 80 & RT < 2500)
+  df <- filter(df,
+               RT > min_rt & RT < max_rt)
+  nrow_new <- nrow(df)
+  nrow_diff <- nrow_orig-nrow_new
+  cat("Number of data points eliminated:", nrow_diff, "out of", nrow_orig)
+  cat("  (", round(nrow_diff / nrow_orig * 100, 2), "%)", sep="")
+  return(df)
+}
+
+remove_outliers_subj_sd <- function(df, sd_threshold=3) {
+  nrow_orig <- nrow(df)
+  df_subj_sd <- df %>% 
+    summarySE(measurevar="RT",
+              groupvars=c("UniqueID"),
+              na.rm=T) %>% 
+    select(UniqueID, RT, sd) %>% 
+    dplyr::rename(MeanRT = RT)
+  df <- merge(df, df_subj_sd, by="UniqueID")
+  df <- df %>% 
+    filter(RT < MeanRT+sd_threshold*sd & RT > MeanRT-sd_threshold*sd)
+  df$sd <- NULL
+  df$MeanRT <- NULL
   nrow_new <- nrow(df)
   nrow_diff <- nrow_orig-nrow_new
   cat("Number of data points eliminated:", nrow_diff, "out of", nrow_orig)
@@ -284,13 +305,18 @@ Remove trials with extreme RTs:
 
 ```{r}
 # Items only:
-dat <- remove_outliers(dat)
+dat <- remove_outliers_thresholds(dat)
 
 # All trials:
-dat_all <- remove_outliers(dat_all)
+dat_all <- remove_outliers_thresholds(dat_all)
 ```
 
-TODO: additional outlier elimination by SD by participant.
+Additional outlier elimination by SD by participant:
+
+```{r}
+dat <- remove_outliers_subj_sd(dat, sd_threshold=3)
+dat_all <- remove_outliers_subj_sd(dat_all, sd_threshold=3)
+```
 
 Check region times after outlier elimination:
 
@@ -402,13 +428,14 @@ ggplot(data = dat_plot,
        aes(x = Region,
            y = RT,
            color = ExpCondition,
-           group = ExpCondition)) +
+           linetype = Task,
+           group = interaction(ExpCondition, Task))) +
   geom_line(linewidth = 1) +
   geom_point(size = 2) +
   geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
                 width = 0.2, 
                 linewidth = 0.5) +
-  facet_wrap(~UniqueID+Task) +
+  facet_wrap(~UniqueID) +
   labs(color = "Expectancy") +
   xlab("Region") +
   ylab("Reading Time (ms)") +
@@ -445,13 +472,15 @@ ggplot(data = dat_plot,
        aes(x = Region,
            y = RT,
            color = ExpCondition,
-           group = ExpCondition)) +
+           linetype = Task,
+           group = interaction(ExpCondition, Task))) +
   geom_line(linewidth = 1) +
   geom_point(size = 2) +
   geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
                 width = 0.2, 
                 linewidth = 0.5) +
-  facet_wrap(~ExpItemNum+Task) +
+  # facet_wrap(~ExpItemNum+Task) +
+  facet_wrap(~ExpItemNum) +
   labs(color = "Expectancy") +
   xlab("Region") +
   ylab("Reading Time (ms)") +
@@ -470,7 +499,7 @@ ggplot(data = dat_plot,
   scale_color_manual(values = c("navy", "steelblue1"))
 
 ggsave("./plots/RTs_items.png", plot = last_plot(),
-       width=20, height=20, dpi=320)
+       width=30, height=20, dpi=320)
 ```
 
 
@@ -482,7 +511,7 @@ Plot the RT over time (items and fillers; averaging across the 4 extracted regio
 dat_plot <- summarySE(dat_all,
                       measurevar="RT",
                       groupvars=c("Block", "TrialCounterGlobal",
-                                  "UniqueID", "Task"),
+                                  "UniqueID", "Task", "TaskOrder"),
                       na.rm=T)
 
 ggplot(data = dat_plot,
@@ -491,17 +520,19 @@ ggplot(data = dat_plot,
            color = UniqueID,
            linetype = Task,
            group = interaction(UniqueID, Block))) +
-  geom_smooth(method = "lm", se = TRUE, size = 1.2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
   # geom_line(linewidth = 1) +
   # geom_point(size = 2) +
   labs(color = "Subject", linetype = "Task") +
   xlab("Trial number") +
   ylab("Reading Time (ms)") +
-  geom_vline(xintercept = 88, linetype = "dashed", color = "red", size = 1) +
-  annotate("text", x = 85, y = 500, #y = max(dat_plot$RT-100),
+  geom_vline(xintercept = 90, linetype = "solid", color = "black",
+             linewidth = 0.8) +
+  annotate("text", x = 87, y = 500, #y = max(dat_plot$RT-100),
            label = "Start second half",
-           color = "red", angle = 90, hjust = 0.5) +
+           color = "black", angle = 90, hjust = 0.5) +
   ggtitle("Reading Times by Block") +
+  facet_wrap(~TaskOrder) +
   theme_minimal() +
   theme(
     axis.title.x = element_text(size = 14, face = "bold"),
@@ -515,7 +546,7 @@ ggplot(data = dat_plot,
   )
 
 ggsave("./plots/RTs_over_time.png", plot = last_plot(),
-       width=10, height=8, dpi=320)
+       width=14, height=6, dpi=320)
 ```
 
 
