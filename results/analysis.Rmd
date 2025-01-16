@@ -123,6 +123,14 @@ dat <- read.csv("results_preprocessed.csv", header=TRUE)
 ```
 
 
+Remove subjects to be excluded:
+
+```{r}
+dat <- dat %>%
+  filter(!UniqueID %in% c("vuqqnd", "ee49u2", "vznkz3", "3jw4ew", "ps4dv4")) # non-natives
+```
+
+
 Extract critical regions & first check of RTs:
 
 ```{r}
@@ -159,8 +167,11 @@ xtabs(~ UniqueID + Task, completeness)  # should show 80 everywhere
 # Block by subject
 xtabs(~ UniqueID + Block, completeness)  # should show 40 everywhere
 
+# List by subject
+xtabs(~ UniqueID + LatinList, completeness)  # must show 160 or 0 everywhere
+
 # Random order
-xtabs(~ RandomOrder + LatinList, completeness)
+xtabs(~ RandomOrder + LatinList, completeness)  # should show 160 or 0; multiples of 160 mean some subjects ran the same order
 ```
 
 
@@ -203,7 +214,7 @@ dat %>%
 
 Plot the number of production timeouts by participant:
 
-```{r}
+```{r timeout-subjects-plot, fig.height=5, fig.width=15}
 dat_Timeouts <- dat %>% 
   filter(Task == "Production") %>% 
   select(c("UniqueID", "ExpCondition", "ProductionTimeout",
@@ -221,7 +232,6 @@ ggplot(data=dat_Timeouts,
   ylab("N Production Timeouts") +
   ggtitle("Production Timeouts by Subject") +
   theme_minimal() +
-  scale_fill_brewer(palette = "Pastel1") + 
   theme(
     axis.title.x = element_text(size = 14, face = 'bold'),
     axis.title.y = element_text(size = 14, face = 'bold'),
@@ -239,7 +249,7 @@ Comprehension question Answer Time:
 ```{r}
 dat_AnswerRTs <- dat %>%
   filter(QuestionText != "")
-hist(dat_AnswerRTs$AnswerTime, breaks = 25, col="steelblue")
+# hist(dat_AnswerRTs$AnswerTime, breaks = 25, col="steelblue")
 
 ggplot(data=dat_AnswerRTs,
         aes(AnswerTime, fill=UniqueID)) + 
@@ -282,9 +292,10 @@ dat <- dat %>%
 Check for outliers:
 
 ```{r}
-hist(dat$RT, breaks = 25, col="steelblue")
+# hist(dat$RT, breaks = 25, col="steelblue")
 
-ggplot(data=dat,
+rt_hist <- function(dat) {
+  ggplot(data=dat,
         aes(RT, fill=UniqueID)) + 
   geom_histogram(alpha = 0.5,
                  show.legend=TRUE) + 
@@ -299,6 +310,8 @@ ggplot(data=dat,
     plot.title = element_text(size = 25, face = 'bold'),
     strip.text = element_text(size = 18, face = "bold")
   ) 
+}
+rt_hist(dat)
 ```
 
 Remove trials with extreme RTs:
@@ -324,15 +337,17 @@ Check region times after outlier elimination:
 print_RTs(dat)
 ```
 
+```{r}
+rt_hist(dat)
+```
+
 
 
 # Plots
 
-## Bar plots of the target region
+## Bar plot (target region only!)
 
-Plot by condition with confidence intervals:
-
-```{r}
+```{r rt-bar-plot}
 # Generate a summary data frame including the SE:
 dat_plot <- summarySE(filter(dat, WordPosition == TargetPosition),
                       measurevar="RT",
@@ -353,7 +368,7 @@ ggplot(data=dat_plot,
               width=0.1, linewidth=0.3) +
   # xlab("Condition") +
   ylab("Reading Time (ms)") +
-  ggtitle("Reading Time by Task") +
+  ggtitle("RT by Task (target)") +
   scale_fill_manual(values=c("navy", "steelblue1")) +
   ylim(0, max_y) +
   theme_minimal() + 
@@ -372,9 +387,9 @@ ggsave("./plots/RTs_target_barplot.png", plot = last_plot(),
 ```
 
 
-## Line plot of all regions
+## Line plot
 
-```{r}
+```{r rt-line-plot, fig.height=5, fig.width=8}
 # Generate a summary data frame including the SE:
 dat_plot <- summarySE(dat,
                       measurevar="RT",
@@ -414,9 +429,9 @@ ggsave("./plots/RTs.png", plot = last_plot(),
 ```
 
 
-## Line plot by subjects
+## RTs by subject
 
-```{r}
+```{r rt-subj-plot, fig.height=10, fig.width=15}
 # Generate a summary data frame including the SE:
 dat_plot <- summarySE(dat,
                       measurevar="RT",
@@ -454,13 +469,13 @@ ggplot(data = dat_plot,
   scale_color_manual(values = c("navy", "steelblue1"))
 
 ggsave("./plots/RTs_subjects.png", plot = last_plot(),
-       width=10, height=7, dpi=320)
+       width=15, height=12, dpi=320)
 ```
 
 
 ## Line plot by item
 
-```{r}
+```{r rt-item-plot, fig.height=10, fig.width=15}
 # Generate a summary data frame including the SE:
 dat_plot <- summarySE(dat,
                       measurevar="RT",
@@ -507,7 +522,7 @@ ggsave("./plots/RTs_items.png", plot = last_plot(),
 
 Plot the RT over time (items and fillers; averaging across the 4 extracted regions).
 
-```{r}
+```{r rt-time-plot, fig.height=7, fig.width=12}
 dat_plot <- summarySE(dat_all,
                       measurevar="RT",
                       groupvars=c("Block", "TrialCounterGlobal",
@@ -550,12 +565,56 @@ ggsave("./plots/RTs_over_time.png", plot = last_plot(),
 ```
 
 
-# Model
+## RTs by wordlength and frequency
+
+```{r rt-wordlen-plot, eval=FALSE}
+# Generate a summary data frame including the SE:
+dat_plot <- summarySE(filter(dat, Region == "target"),
+                      measurevar="RT",
+                      groupvars=c("TargetLength"),
+                      na.rm=T)
+dat_plot$TargetLength <- as.factor(dat_plot$TargetLength)
+
+# Determine maximal value for y-axis:
+max_y <- max(c(dat_plot$RT + dat_plot$se))
+
+# Plot:
+ggplot(data=dat_plot,
+       aes(TargetLength, RT, fill=TargetLength)) +
+  geom_bar(aes(fill=TargetLength),
+           stat="identity",
+           width=1,
+           show.legend=TRUE) +
+  geom_errorbar(aes(ymin = RT-se, ymax = RT+se),
+              width=0.1, linewidth=0.3) +
+  # xlab("Condition") +
+  ylab("Reading Time (ms)") +
+  ggtitle("Target RT by Word Length") +
+  scale_fill_manual(values=c("navy", "steelblue1")) +
+  ylim(0, max_y) +
+  theme_minimal() + 
+  theme(
+      axis.title.x = element_text(size = 14, face = 'bold'),
+      axis.title.y = element_text(size = 14, face = 'bold'),
+      axis.text.x = element_text(size = 12, face = 'bold'),
+      axis.text.y = element_text(size = 12),
+      plot.title = element_text(size = 25, face = 'bold'),
+      legend.position = "none",
+      strip.text = element_text(size = 18, face = "bold"))
+
+ggsave("./plots/RTs_target_barplot.png", plot = last_plot(),
+       width=6, height=4, dpi=320)
+```
+
+
+
+# Models
 
 ```{r}
 #dat$Item <- as.factor(dat$ExpItemNum)
 #dat$Subject <- as.factor(dat$UniqueID)
-dat$Expectancy <- droplevels(as.factor(dat$ExpCondition))
+dat$Expectancy <- droplevels(factor(dat$ExpCondition,
+                                    levels = c("High", "Low")))
 contrasts(dat$Expectancy) <- c(-0.5, 0.5)
 dat$Task <- as.factor(dat$Task)
 contrasts(dat$Task) <- c(-0.5, 0.5)
@@ -566,27 +625,100 @@ dat$Freq_c <- scale(dat$TargetFreq)
 
 #TODO: residualize for word length + frequency instead?
 #TODO: add precritical RT as predictor?
+```
 
-# Baby LM with binary Expectancy predictor:
+
+## Linear model of target region (sanity check)
+
+A simple linear model with a binary predictor:
+
+```{r linear-model}
 summary(lm(logRT ~ Expectancy * Task + Length_c + Freq_c,
-           data = filter(dat, WordPosition == TargetPosition)))
+           data = filter(dat, Region == "target")))
+```
 
-# Target region
+
+## Target word
+
+Lmer with cloze as predictor:
+
+```{r lmer-target-cloze}
 m_target <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
-                   (1 | Subject) + (1 | Item),
-           data = filter(dat, WordPosition == TargetPosition))
+                   (1 + Cloze_c + Task | Subject) +
+                   (1 + Cloze_c + Task | Item),
+                 data = filter(dat, Region == "target"))
 summary(m_target)
+```
 
-# Spillover 1
+Lmer with binary expectancy as predictor:
+
+```{r lmer-target-binary-expectancy}
+m_target <- lmer(logRT ~ Expectancy * Task + Length_c + Freq_c +
+                   (1 + Expectancy + Task | Subject) +
+                   (1 + Expectancy + Task | Item),
+                 data = filter(dat, Region == "target"))
+summary(m_target)
+```
+
+
+## Spillover region 1
+
+Lmer with cloze as predictor:
+
+```{r lmer-spillover1-cloze}
 m_spill1 <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
-                   (1 | Subject) + (1 | Item),
-           data = filter(dat, WordPosition == TargetPosition+1))
+                   (1 + Cloze_c + Task | Subject) +
+                   (1 + Cloze_c + Task | Item),
+                 data = filter(dat, Region == "spill1"))
 summary(m_spill1)
+```
 
-# Spillover 2
+Lmer with binary expectancy as predictor:
+
+```{r  lmer-spillover1-binary-expectancy}
+# Spillover 1
+m_spill1 <- lmer(logRT ~ Expectancy * Task + Length_c + Freq_c +
+                   (1 + Expectancy + Task | Subject) +
+                   (1 + Expectancy + Task | Item),
+                 data = filter(dat, Region == "spill1"))
+summary(m_spill1)
+```
+
+
+## Spillover region 2
+
+Lmer with cloze as predictor:
+
+```{r lmer-spillover2-cloze}
 m_spill2 <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
-                   (1 | Subject) + (1 | Item),
-           data = filter(dat, WordPosition == TargetPosition+2))
+                   (1 + Cloze_c + Task | Subject) +
+                   (1 + Cloze_c + Task | Item),
+                 data = filter(dat, Region == "spill2"))
 summary(m_spill2)
 ```
 
+Lmer with binary expectancy as predictor:
+
+```{r  lmer-spillover2-binary-expectancy}
+m_spill2 <- lmer(logRT ~ Expectancy * Task + Length_c + Freq_c +
+                   (1 + Expectancy + Task | Subject) +
+                   (1 + Expectancy + Task | Item),
+                 data = filter(dat, Region == "spill2"))
+summary(m_spill2)
+```
+
+
+## A pooled model for mean RT across all critical regions
+
+```{r lmer-pooled-regions}
+dat_meanregions <- dat %>% 
+  filter(Region %in% c("target", "spill1", "spill2")) %>% 
+  group_by(Subject, Item, Task, Cloze_c, Expectancy, Length_c, Freq_c) %>%
+  dplyr::summarize(logRT = log(mean(RT)))
+
+m_allregions <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
+                   (1 + Cloze_c + Task | Subject) +
+                   (1 + Cloze_c + Task | Item),
+                 data = dat_meanregions)
+summary(m_allregions)
+```
