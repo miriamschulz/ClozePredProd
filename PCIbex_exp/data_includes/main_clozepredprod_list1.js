@@ -6,7 +6,7 @@
 PennController.ResetPrefix(null);
 DebugOff()
 
-Sequence(
+Sequence("counter",
          "preload_trials",
          "welcome",
          "consent",
@@ -51,6 +51,9 @@ Sequence(
          SendResults(),
          "prolific_code"
 );
+
+// Increment the counter at the start
+SetCounter("counter", "inc", 1);
 
 // Create a unique ID per participant as a variable (to append to results + recordings)
 id = ("0000" + ((Math.random() * Math.pow(36, 8)) | 0).toString(36)).slice(-6);
