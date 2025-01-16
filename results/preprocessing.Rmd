@@ -68,17 +68,26 @@ read.pcibex <- function(filepath, auto.colnames=TRUE, fun.col=function(col,cols)
     return(read.csv(filepath, comment.char="#", header=FALSE, col.names=seq(1:n.cols)))
   }
 }
+
+convert_to_hours <- function(minutes) {
+  minutes <- round(minutes)
+  hours <- minutes %/% 60 %/% 60
+  remaining_minutes <- (minutes %/% 60) - hours*60
+  seconds <- minutes %% 60
+  formatted_time <- sprintf("%dh%02dm%02d", hours, remaining_minutes, seconds)
+  return(formatted_time)
+}
 ```
 
 Read data frame:
 
 ```{r}
-df <- read.pcibex('results_dev.csv')
-# df <- read.pcibex('results.csv')
+# df <- read.pcibex('results_dev.csv')
+df <- read.pcibex('results.csv')
 #check <- df %>% filter(UniqueID=="NULL")
 df <- unique(df)
 
-df <- df[!df$UniqueID %in% c('4lchm0'), ]  # remove subject(s)
+# df <- df[!df$UniqueID %in% c('4lchm0'), ]  # remove subject(s)
 #summary(as.factor(df$UniqueID))
 # df %>% filter(Parameter == "Age") %>% select(Value)  # check that no 999 (me)
 ```
@@ -86,9 +95,11 @@ df <- df[!df$UniqueID %in% c('4lchm0'), ]  # remove subject(s)
 
 # Demographics
 
+## General demographics
+
 ```{r}
 df.demogs <- df %>%
-  filter(PennElementName == 'demographics') %>% 
+  filter(PennElementName == 'demographics' | Parameter == "prolific_id") %>% 
   select(UniqueID, Parameter, Value)
 
 # Fix whitespace characters
@@ -101,12 +112,8 @@ df.demogs <- df.demogs %>%
 
 # Make all variables factors and then age numeric
 df.demogs[] <- lapply(df.demogs, tolower)
-df.demogs[-2] <- lapply(df.demogs[-2], as.factor)
+df.demogs[-3] <- lapply(df.demogs[-3], as.factor)  # all columns except Age
 df.demogs$Age <- as.numeric(df.demogs$Age)
-
-#summary(df.demogs)
-#str(df.demogs)
-df.demogs
 
 # Native languages
 summary(df.demogs$Native_language)
@@ -117,8 +124,47 @@ range(df.demogs$Age)
 
 # Gender
 summary(df.demogs$Gender)
+```
 
-write.csv(df.demogs, "results_demographics.csv", row.names=FALSE)
+## Prolific completion times
+
+```{r}
+# Add the prolific IDs
+demogs.prolific <- read.csv("demographics_prolific.csv", header=TRUE)
+demogs.prolific <- demogs.prolific %>%
+  dplyr::rename(prolific_id = Participant.id,
+                Birthplace_prolific = Country.of.birth,
+                Time_taken = Time.taken) %>% 
+  dplyr::filter(Status != "RETURNED") %>% 
+  dplyr::select(prolific_id, Birthplace_prolific, Time_taken)
+
+df.demogs <- merge(df.demogs, demogs.prolific, by="prolific_id", all.x=TRUE)
+df.demogs$Time_taken_h <- convert_to_hours(df.demogs$Time_taken)
+
+# Calculate how the non-natives influenced the median of time taken
+convert_to_hours(median(df.demogs$Time_taken))
+non_natives <- c("vuqqnd", "ee49u2", "vznkz3", "3jw4ew", "ps4dv4")
+
+# Median completion time of the non-natives:
+df.demogs %>%
+  filter(UniqueID %in% non_natives) %>% 
+  summarise(median_time = median(Time_taken, na.rm = TRUE),
+            mean_time = mean(Time_taken, na.rm = TRUE)) %>%
+  mutate(median_time_hours = convert_to_hours(median_time),
+         mean_time_hours = convert_to_hours(mean_time))
+
+# Median completion time of the natives:
+df.demogs %>%
+  filter(!UniqueID %in% non_natives) %>% 
+  summarise(median_time = median(Time_taken, na.rm = TRUE),
+            mean_time = mean(Time_taken, na.rm = TRUE)) %>%
+  mutate(median_time_hours = convert_to_hours(median_time),
+         mean_time_hours = convert_to_hours(round(mean_time)))
+```
+
+```{r}
+write.csv(df.demogs, "demographics.csv", row.names=FALSE)
+
 ```
 
 
@@ -139,7 +185,7 @@ df.survey[] <- lapply(df.survey, as.factor)
 summary(df.survey$Experiment_length)
 summary(df.survey$Task_difficulty)
 
-write.csv(df.survey, "results_postexp_survey.csv", row.names=FALSE)
+write.csv(df.survey, "postexp_survey.csv", row.names=FALSE)
 ```
 
 
@@ -212,62 +258,12 @@ mean(df.acc.subj$Accuracy)
 ```
 
 
-## Completeness check
-
-Check the item-condition and item-condition-Latin square completeness:
-
-[TODO: this must be done for the production data too!]
-
-```{r}
-# Comprehension questions
-xtabs(~ ExpCondition + ExpItemNum, df.key.trials)
-xtabs(~ ExpCondition + ExpItemNum + LatinList, df.key.trials)
-xtabs(~ ExpCondition + ExpItemNum + RandomOrder, df.key.trials)
-
-# Recording filenames
-length(unique(prod$RecordingFilename))
-```
-
-
-## Production time
-
-```{r}
-# Mean production time and task RT
-prod.targets <- filter(prod, WordPosition == TargetPosition)
-
-mean(as.numeric(prod.targets$AnswerTime))
-
-# N of timeouts during production (> 4 sec)
-summary(as.factor(prod.targets$ProductionTimeout))
-
-# Timeouts by subject 
-prod.timeouts <- xtabs(~ UniqueID + ProductionTimeout, prod.targets)#[, 2]
-#TODO redo the next two lines: this doesn't work if there is no timeout in df
-range(prod.timeouts[1,])
-hist(prod.timeouts,
-     breaks=max(prod.timeouts),
-     col='steelblue')
-```
-
-
-## Question answer time
-
-```{r}
-# Mean production time and task RT
-comp.targets <- filter(comp, WordPosition == TargetPosition)
-comp.targets$AnswerTime <- as.numeric(comp.targets$AnswerTime)
-mean(comp.targets$AnswerTime)
-comp.answertime <- comp.targets %>% filter(TargetAnswer %in% c("True", "False"))
-hist(comp.answertime$AnswerTime,
-     breaks=30,
-     col='steelblue')
-```
-
-
 ## RTs (superficial first check)
 
 ```{r}
+comp.targets <- filter(comp, WordPosition == TargetPosition)
 comp.targets$RT <- as.numeric(comp.targets$RT)
+prod.targets <- filter(prod, WordPosition == TargetPosition)
 prod.targets$RT <- as.numeric(prod.targets$RT)
 
 mean(comp.targets$RT)
