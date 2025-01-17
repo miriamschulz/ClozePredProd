@@ -174,7 +174,12 @@ all$AnswerKey <- ifelse(all$Answer == "FALSE", "F",
                         ifelse(all$Answer == "TRUE", "J", ""))
 ```
 
-# Check results and export
+```{r}
+write.csv(all, "stim_exp_preprocessed.csv", row.names = FALSE)
+```
+
+
+# Check results
 
 Check for completeness and balancedness:
 
@@ -272,9 +277,11 @@ for (bo in 1:2) {
           block$LatinList <- current_list
           # In mode 2, blocks 1+2 will be prod, blocks 3+4 will be comp
           if (b %in% 1:2) {
+            block <- trim_all_spaces(block)
             filename <- generate_filename(current_list, b, "prod")
           } else {
             block <- format_for_comp(block)
+            block <- trim_all_spaces(block)
             filename <- generate_filename(current_list, b, "comp")
           }
         }
