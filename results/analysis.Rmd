@@ -29,6 +29,8 @@ Custom functions:
 
 ```{r}
 preprocess_data <- function(df) {
+  
+  # Annotate the region 
   df$Region <- "other"
   df <- df %>%
     mutate(Region = case_when(
@@ -39,12 +41,27 @@ preprocess_data <- function(df) {
     ))
   df$Region <- factor(df$Region, levels=c("pre-critical", "target",
                                           "spill1", "spill2"))
+  
+  # Transform variables
   df$RT <- as.numeric(df$RT)
   df$ExpCondition <- as.factor(df$ExpCondition)
+  
+  # Assign unique subject numbers from 1 to N
   df <- df %>%
     mutate(Subject = match(UniqueID, unique(UniqueID)))
   df$Subject <- as.factor(df$Subject)
   df$Item <- as.factor(df$ExpItemNum)
+  
+  # Add precritical RTs as new column (by Subject/Item)
+  df_precrit <- df %>%
+    dplyr::filter(Region == "pre-critical") %>%
+    dplyr::select(Item, Subject, PreCriticalRT = RT)
+  df <- df %>%
+    left_join(df_precrit, by = c("Item", "Subject"))
+  
+  # Add a binary predictor to distinguish first vs. second half
+  df$Half <- ifelse(df$Block %in% 1:2, "First Half", "Second Half")
+
   return(df)
 }
 
@@ -166,6 +183,21 @@ xtabs(~ UniqueID + LatinList, completeness)  # must show 160 or 0 everywhere
 
 # Random order
 xtabs(~ RandomOrder + LatinList, completeness)  # should show 160 or 0; multiples of 160 mean some subjects ran the same order
+
+# Sort by time (useful to get the latest RandomOrder used, i.e. counter state):
+completeness %>% 
+  select(LatinList, RandomOrder) %>% 
+  unique()
+
+# Random order sorted by subject
+completeness %>%
+  select(UniqueID, RandomOrder) %>%
+  arrange(UniqueID) %>% 
+  unique()
+
+# Subjects per list
+n_trials <- 160
+xtabs(~ LatinList, completeness) / n_trials
 ```
 
 
@@ -399,7 +431,7 @@ write.csv(dat, "results_preprocessed_filtered.csv", row.names=FALSE)
 ```
 
 
-# Plots
+# RT Plots
 
 ## Bar plot (target region only!)
 
@@ -484,6 +516,51 @@ ggplot(data = dat_plot,
   scale_color_manual(values = c("navy", "steelblue1"))
 
 ggsave("./plots/RTs.png", plot = last_plot(),
+       width=10, height=7, dpi=320)
+```
+
+
+## Line plot by task order
+
+```{r rt-line-plot-taskorder, fig.height=5, fig.width=8}
+# Generate a summary data frame including the SE:
+dat_plot <- summarySE(dat,
+                      measurevar="RT",
+                      groupvars=c("Region", "ExpCondition",
+                                  "Task", "Half"),
+                      na.rm=T)
+
+ggplot(data = dat_plot,
+       aes(x = Region,
+           y = RT,
+           color = ExpCondition,
+           linetype = Task,
+           group = interaction(ExpCondition, Task))) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
+                width = 0.2, 
+                linewidth = 0.5) +
+  facet_wrap(~Half) +
+  labs(color = "Expectancy") +
+  xlab("Region") +
+  ylab("Reading Time (ms)") +
+  ggtitle("Reading Times by Region and Task Order") +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 16, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  ) +
+  scale_color_manual(values = c("navy", "steelblue1"))
+
+ggsave("./plots/RTs_task_order.png", plot = last_plot(),
        width=10, height=7, dpi=320)
 ```
 
@@ -581,7 +658,7 @@ ggsave("./plots/RTs_items.png", plot = last_plot(),
 
 ## Individual item plots
 
-```{r item-plots-individual, eval = TRUE}
+```{r item-plots-individual, eval = FALSE}
 dat_plot <- summarySE(dat_all,
                       measurevar="RT",
                       groupvars=c("Region", "ExpCondition",
@@ -704,21 +781,23 @@ dat_plot <- summarySE(filter(dat, !(Region %in% c("other"))),
                       measurevar="RT",
                       groupvars=c("TargetLength", "Region"),
                       na.rm=T)
-dat_plot$TargetLength <- as.factor(dat_plot$TargetLength)
+# dat_plot$TargetLength <- as.factor(dat_plot$TargetLength)
 
 # Determine maximal value for y-axis:
 max_y <- max(c(dat_plot$RT + dat_plot$se))
 
 # Plot:
 ggplot(data=dat_plot,
-       aes(TargetLength, RT, fill=TargetLength)) +
-  geom_bar(aes(fill=TargetLength),
-           stat="identity",
-           width=1,
-           show.legend=TRUE) +
+       aes(TargetLength, RT)) +
+  # geom_bar(aes(fill=TargetLength),
+  #          stat="identity",
+  #          width=1,
+  #          show.legend=TRUE) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 1.2, color = "steelblue") +
+  geom_point(color = "steelblue", size = 3) +
   geom_errorbar(aes(ymin = RT-se, ymax = RT+se),
               width=0.1, linewidth=0.3) +
-  xlab("Target Word Length in n characters") +
+  xlab("Target Word Length in N characters") +
   ylab("Reading Time (ms)") +
   ggtitle("RT by Target Word Length") +
   ylim(0, max_y) +
@@ -747,22 +826,24 @@ dat_plot <- summarySE(dat_plot,
                       measurevar="RT",
                       groupvars=c("TargetFreq", "Region"),
                       na.rm=T)
-dat_plot$TargetFreq <- as.factor(dat_plot$TargetFreq)
+# dat_plot$TargetFreq <- as.factor(dat_plot$TargetFreq)
 
 # Determine maximal value for y-axis:
 max_y <- max(c(dat_plot$RT + dat_plot$se))
 
 # Plot:
 ggplot(data=dat_plot,
-       aes(TargetFreq, RT, fill=TargetFreq)) +
-  geom_bar(aes(fill=TargetFreq),
-           stat="identity",
-           width=1,
-           position = position_dodge(0.8),
-           show.legend=TRUE) +
+       aes(TargetFreq, RT)) +
+  # geom_bar(aes(fill=TargetFreq),
+  #          stat="identity",
+  #          width=1,
+  #          position = position_dodge(0.8),
+  #          show.legend=TRUE) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 1.2, color = "steelblue") +
+  geom_point(color = "steelblue", size = 3) +
   geom_errorbar(aes(ymin = RT-se, ymax = RT+se),
-              width=0.2, linewidth=0.3,
-              position = position_dodge(0.8)) +
+              width=0.2, linewidth=0.3) +
+              # position = position_dodge(0.8)) +
   xlab("Target Word Frequency (log10 SUBTLEX, rounded to 1 decimal)") +
   ylab("Reading Time (ms)") +
   ggtitle("RT by Target Word Frequency") +
@@ -782,20 +863,31 @@ ggplot(data=dat_plot,
 
 
 
+
 # Models
 
 ```{r}
-#dat$Item <- as.factor(dat$ExpItemNum)
-#dat$Subject <- as.factor(dat$UniqueID)
 dat$Expectancy <- droplevels(factor(dat$ExpCondition,
                                     levels = c("High", "Low")))
 contrasts(dat$Expectancy) <- c(-0.5, 0.5)
 dat$Task <- as.factor(dat$Task)
 contrasts(dat$Task) <- c(-0.5, 0.5)
 dat$logRT <- log(dat$RT)
+dat$logPreCritRT <- log(dat$PreCriticalRT)
 dat$Cloze_c <- scale(dat$ClozeProb)
 dat$Length_c <- scale(dat$TargetLength)
 dat$Freq_c <- scale(dat$TargetFreq)
+
+dat$TrialCounterTask_c <- scale(dat$TrialCounterTask)
+dat$TrialCounterGlobal_c <- scale(dat$TrialCounterGlobal)
+
+dat$Half <- factor(dat$Half, levels = c("First Half", "Second Half"))
+contrasts(dat$Half) <- c(-0.5, 0.5)
+
+dat$TaskOrder <- factor(dat$TaskOrder, levels = c("comp_prod", "prod_comp"))
+contrasts(dat$TaskOrder) <- c(-0.5, 0.5)
+dat$BlocksReversed <- factor(dat$BlocksReversed, levels = c("False", "True"))
+contrasts(dat$BlocksReversed) <- c(-0.5, 0.5)
 
 #TODO: residualize for word length + frequency instead?
 #TODO: add precritical RT as predictor?
@@ -818,7 +910,8 @@ Lmer with cloze as predictor:
 
 ```{r lmer-target-cloze}
 m_target <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
-                   (1 + Cloze_c + Task | Subject) +
+                   TrialCounterTask_c + logPreCritRT +
+                   (1 + Cloze_c + Task + TrialCounterTask_c | Subject) +
                    (1 + Cloze_c + Task | Item),
                  data = filter(dat, Region == "target"))
 summary(m_target)
@@ -841,11 +934,38 @@ Lmer with cloze as predictor:
 
 ```{r lmer-spillover1-cloze}
 m_spill1 <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
-                   (1 + Cloze_c + Task | Subject) +
+                   TrialCounterTask_c +
+                   logPreCritRT +
+                   (1 + Cloze_c + Task + TrialCounterTask_c | Subject) +
                    (1 + Cloze_c + Task | Item),
                  data = filter(dat, Region == "spill1"))
 summary(m_spill1)
 ```
+
+```{r lmer-spillover1-cloze-half}
+# A main effect of half
+lmer(logRT ~ Cloze_c + Task + Length_c + Freq_c + 
+       Half +
+       (1 | Subject) +
+       (1 | Item),
+     data = filter(dat, Region == "spill1")) %>% summary()
+
+# But: this goes away when adding the random slope for Half, suggesting
+# that this effect hinges on some participants:
+lmer(logRT ~ Cloze_c + Task + Length_c + Freq_c + 
+       Half +
+       (1 + Half | Subject) +
+       (1 | Item),
+     data = filter(dat, Region == "spill1")) %>% summary()
+
+# Reversed block order should have no effect
+lmer(logRT ~ Cloze_c + Task + Length_c + Freq_c + 
+       BlocksReversed +
+       (1 | Subject) +
+       (1 | Item),
+     data = filter(dat, Region == "spill1")) %>% summary()
+```
+
 
 Lmer with binary expectancy as predictor:
 
@@ -865,7 +985,8 @@ Lmer with cloze as predictor:
 
 ```{r lmer-spillover2-cloze}
 m_spill2 <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
-                   (1 + Cloze_c + Task | Subject) +
+                 TrialCounterTask_c + logPreCritRT +
+                   (1 + Cloze_c + Task + TrialCounterTask_c | Subject) +
                    (1 + Cloze_c + Task | Item),
                  data = filter(dat, Region == "spill2"))
 summary(m_spill2)
@@ -882,17 +1003,61 @@ summary(m_spill2)
 ```
 
 
-## A pooled model for mean RT across all critical regions
+## Plot model coefficients
 
-```{r lmer-pooled-regions, eval = FALSE}
-dat_meanregions <- dat %>% 
-  filter(Region %in% c("target", "spill1", "spill2")) %>% 
-  group_by(Subject, Item, Task, Cloze_c, Expectancy, Length_c, Freq_c) %>%
-  dplyr::summarize(logRT = log(mean(RT)))
+```{r coef-plot}
+get_coefficients <- function(m) {
+  coef_data <- coef(summary(m)) %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "term") %>%
+  filter(term != "(Intercept)") %>% 
+  dplyr::rename(
+    estimate = Estimate,
+    std.error = `Std. Error`,
+    statistic = `t value`,
+    p.value = `Pr(>|t|)`
+  )
+  return(coef_data)
+}
 
-m_allregions <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
-                   (1 + Cloze_c + Task | Subject) +
-                   (1 + Cloze_c + Task | Item),
-                 data = dat_meanregions)
-summary(m_allregions)
+dat_coef <- NULL
+for (region in c("pre-critical", "target", "spill1", "spill2")) {
+  dat_region <- dat %>% filter(Region == region)
+  m <- lmer(logRT ~ Expectancy * Task + Length_c + Freq_c +
+              (1 | Subject) +
+              (1 | Item),
+            data = dat_region)
+  coef_region <- get_coefficients(m)
+  coef_region$Region <- region
+  
+  if (!exists("dat_coef")) {
+    dat_coef <- coef_region
+    } else {
+    dat_coef <- rbind(dat_coef, coef_region)
+  }
+}
+
+dat_coef$Region <- factor(dat_coef$Region, levels = c("pre-critical","target",
+                                                      "spill1", "spill2"))
+# dat_coef$jittered_x <- jitter(as.numeric(dat_coef$Region), amount = 0.2)
+
+ggplot(dat_coef, aes(x = Region, y = estimate,
+                     color = term)) +
+  # geom_jitter(aes(shape = p.value < 0.05), size = 3, width = 0.2) +
+  geom_errorbar(aes(ymin = estimate - std.error,
+                    ymax = estimate + std.error),
+                width=0.1, size=0.1, color = "black") +
+                # position = position_jitter(width = 0.2)) +
+  # scale_x_discrete(breaks = 1:length(levels(dat_coef$Region)),
+  #                  labels = levels(dat_coef$Region)) + 
+  geom_point(aes(shape = p.value < 0.05), size = 3) +
+  geom_hline(yintercept = 0, color = "black") +
+  scale_shape_manual(values = c(13, 19)) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Model Coefficients",
+       x = "Predictor",
+       y = "Coefficient Estimate") +
+  theme_minimal()
 ```
+
+
