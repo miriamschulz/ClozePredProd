@@ -108,15 +108,6 @@ Read data:
 ```{r}
 # Read preprocessed dfs
 dat <- read.csv("results_preprocessed.csv", header=TRUE)
-
-# dat_pilot3 <- read.csv("results_preprocessed_pilot3.csv", header=TRUE)
-# colnames(dat)
-# colnames(dat_pilot3)
-# dat_pilot3$ClozeProb <- NA
-# dat$ExpItemNum <- dat$ExpItemNumOriginal
-# dat$ExpItemNumOriginal <- NULL
-# dat_pilot3 <- dat_pilot3[, colnames(dat), drop = FALSE]
-# dat <- rbind(dat, dat_pilot3)
 ```
 
 
@@ -124,7 +115,10 @@ Remove subjects to be excluded:
 
 ```{r}
 dat <- dat %>%
-  filter(!UniqueID %in% c("vuqqnd", "ee49u2", "vznkz3", "3jw4ew", "ps4dv4")) # non-natives
+  filter(!UniqueID %in% c("vuqqnd", "ee49u2", "vznkz3",
+                          "3jw4ew", "ps4dv4")) %>%  # nonnatives Prolific Exp 1
+  filter(!UniqueID %in% c("icak56", "2jcruh", "8v42p8", "e2zqww",
+                          "0jxphp", "m7ugwz", "jocpf0")) # non-natives / failed the task on Prolific exp 2
 ```
 
 
@@ -587,30 +581,18 @@ ggsave("./plots/RTs_items.png", plot = last_plot(),
 
 ## Individual item plots
 
-```{r item-plots-individual, eval = FALSE}
+```{r item-plots-individual, eval = TRUE}
 dat_plot <- summarySE(dat_all,
                       measurevar="RT",
                       groupvars=c("Region", "ExpCondition",
                                   "Task", "Item",
                                   "WordPosition", "Word"),
                       na.rm=T)
-# dat_plot$WordPosition <- as.factor(as.numeric(dat_plot$WordPosition))
 dat_plot$WordPosition <- as.numeric(dat_plot$WordPosition)
 summary(dat_plot$WordPosition)
-any(is.na(dat$Word))
 
-x <- dat_plot %>%
-  filter(Item == 1) %>% 
-  group_by(WordPosition) %>%
-  mutate(Word = if_else(
-    WordPosition == 6,
-    paste(unique(Word[WordPosition == 6]), collapse = "/"),
-    Word
-  )) %>%
-  ungroup() 
-
-for (i in 1:length(unique(dat_plot$Item))) {
-# for (i in c(1, 2, 1001, 1002)) {
+# for (i in c(1:80, 1001:1080)) {
+for (i in unique(as.numeric(as.character(dat_plot$Item)))) {
   dat_plot_item <- dat_plot %>% 
     filter(Item == i) %>% 
     group_by(WordPosition) %>%
@@ -621,12 +603,12 @@ for (i in 1:length(unique(dat_plot$Item))) {
     ungroup()
   item_no_char <- as.character(unique(dat_plot_item$Item))
   
-  ggplot(dat_plot_item,
-         aes(x = WordPosition,
-             y = RT,
-             color = ExpCondition,
-             linetype = Task,
-             group = interaction(ExpCondition, Task))) +
+  p <- ggplot(dat_plot_item,
+              aes(x = WordPosition,
+              y = RT,
+              color = ExpCondition,
+              linetype = Task,
+              group = interaction(ExpCondition, Task))) +
     geom_line(linewidth = 1) +
     geom_point(size = 2) +
     geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
@@ -660,7 +642,7 @@ for (i in 1:length(unique(dat_plot$Item))) {
     scale_color_manual(values = c("navy", "steelblue1"))
   
   plot_title <- paste0("./plots/item_plots/item_", as.character(i), ".png")
-  ggsave(plot_title, plot = last_plot(), width=12, height=5, dpi=320)
+  ggsave(plot_title, plot = p, width=12, height=5, dpi=320)
 }
 ```
 
@@ -844,7 +826,7 @@ summary(m_target)
 
 Lmer with binary expectancy as predictor:
 
-```{r lmer-target-binary-expectancy}
+```{r lmer-target-binary-expectancy, eval = FALSE}
 m_target <- lmer(logRT ~ Expectancy * Task + Length_c + Freq_c +
                    (1 + Expectancy + Task | Subject) +
                    (1 + Expectancy + Task | Item),
@@ -867,7 +849,7 @@ summary(m_spill1)
 
 Lmer with binary expectancy as predictor:
 
-```{r  lmer-spillover1-binary-expectancy}
+```{r  lmer-spillover1-binary-expectancy, eval = FALSE}
 # Spillover 1
 m_spill1 <- lmer(logRT ~ Expectancy * Task + Length_c + Freq_c +
                    (1 + Expectancy + Task | Subject) +
@@ -891,7 +873,7 @@ summary(m_spill2)
 
 Lmer with binary expectancy as predictor:
 
-```{r  lmer-spillover2-binary-expectancy}
+```{r  lmer-spillover2-binary-expectancy, eval = FALSE}
 m_spill2 <- lmer(logRT ~ Expectancy * Task + Length_c + Freq_c +
                    (1 + Expectancy + Task | Subject) +
                    (1 + Expectancy + Task | Item),
@@ -902,7 +884,7 @@ summary(m_spill2)
 
 ## A pooled model for mean RT across all critical regions
 
-```{r lmer-pooled-regions}
+```{r lmer-pooled-regions, eval = FALSE}
 dat_meanregions <- dat %>% 
   filter(Region %in% c("target", "spill1", "spill2")) %>% 
   group_by(Subject, Item, Task, Cloze_c, Expectancy, Length_c, Freq_c) %>%
