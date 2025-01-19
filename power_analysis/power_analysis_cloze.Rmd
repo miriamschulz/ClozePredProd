@@ -66,6 +66,7 @@ generate_dataframe <- function(n_subj, n_items) {
 
   # Add Cloze Probability
   dat <- merge(dat, stim, by=c("Item", "Expectancy"))
+  dat$Item <- as.factor(dat$Item)
   
   # Set contrasts
   contrasts(dat$Expectancy) <- c(-0.5, 0.5)
@@ -84,7 +85,12 @@ power_analysis <- function(dat,
                            mean_rt,
                            cloze_fixed, task_fixed, interaction_fixed,
                            n_subj, n_items,
-                           verbose=FALSE) {
+                           verbose=FALSE,
+                           vocal=FALSE) {
+  
+  if (vocal == TRUE) {
+      system(paste0("say Total number of simulations: ", length(n_subj)))
+  }
   
   for (s in 1:length(n_subj)) {
     
@@ -168,7 +174,12 @@ power_analysis <- function(dat,
         }
       }
     }
-    beepr::beep()  # beep once the current batch of subjects is finished
+    # Progress report (for knitting in R markdown)
+    if (vocal == TRUE) {
+      system(paste0("say Finished simulation number ", s))
+    } else {
+      beepr::beep()  # beep once the current batch of subjects is finished
+    }
   }
   #COF$warning <- warn
   return(COF)
@@ -177,6 +188,8 @@ power_analysis <- function(dat,
 
 
 ## Run power analysis
+
+### Set parameters 
 
 Set the fixed and random effects, and initialize:
 
@@ -189,24 +202,21 @@ mean_rt <- 365  # intercept
 # Note that these vectorsmust be the SAME length, but one can vary 
 # which fixed effect to test by keeping the values in the vectors for the other
 # effects constant, e.g., task_fixed <- c(5, 5, 5).
-cloze_fixed <- c(0, 2.5, 5)  # simulation values for expectancy
-task_fixed <- c(50, 75, 100)  # simulation values for task
-interaction_fixed <- c(3, 5, 7)  # simulation values for cloze:task interaction
+cloze_fixed <- c(2.5, 5, 7.5)  # simulation values for expectancy
+task_fixed <- c(50, 100)  # simulation values for task
+interaction_fixed <- c(2.5, 5, 7.5)  # simulation values for cloze:task interaction
 
 # Define random effects and variance
-sd_Subj <- c(30, 10, 10)
-sd_Item <- c(30, 10, 10)
-sd_Res  <- 50
+sd_Subj <- c(30, 20, 100) # by-subj intercept, by-subj slope for cloze, by-subj slope for task
+sd_Item <- c(30, 20, 75)  # by-item intercept, by-item slope for cloze, by-item slope for task
+sd_Res  <- 50  # residual variance
 ```
 
 Define vectors for the number of subjects and items to simulate:
 
 ```{r set-nsubj-nitems}
-n_subj <- seq(8, 96, 8)
-n_items <- seq(80, 96, 8)
-
-# n_subj <- seq(8, 16, 8)
-# n_items <- seq(80, 80, 8)
+n_subj <- seq(8, 80, 8)
+n_items <- seq(64, 80, 8)
 ```
 
 Read in the stimuli file to extract the Cloze probabilities to be used as predictor:
@@ -216,15 +226,18 @@ stim <- read.csv("stim_exp_preprocessed.csv", header = TRUE)
 stim$ItemNum <- as.numeric(stim$ItemNum)
 stim <- stim %>%
   select(ItemNum, ExpCondition, ClozeProb) %>% 
-  filter(ItemNum <= 80) %>% 
+  filter(ItemNum <= 80) %>%
   dplyr::rename(Expectancy = ExpCondition, Item = ItemNum) %>% 
   mutate(Item = sprintf("Item%02d", Item))
 stim$ClozeProb <- scale(as.numeric(stim$ClozeProb))
 ```
 
+
+### Run
+
 Run power analysis and format power analysis data frame:
 
-```{r power_analysis, eval=TRUE}
+```{r power_analysis, eval=FALSE}
 set.seed(42)
 COF <- data.frame()
 #warn <- c()
@@ -232,7 +245,8 @@ COF <- power_analysis(dat,
                       mean_rt,
                       cloze_fixed, task_fixed, interaction_fixed,
                       n_subj, n_items,
-                      verbose = FALSE)
+                      verbose = FALSE,
+                      vocal = TRUE)
 #warn <- power_output[2]
 
 # Results for LMMs
@@ -247,17 +261,17 @@ COF$sign1   <- as.numeric(COF$p1 < .05) # determine significant results; one-tai
 COF$sign2   <- as.numeric(COF$p2 < .05) # Significant results for Task
 COF$sign3   <- as.numeric(COF$p3 < .05) # Significant results for Task
 
-COF$nsjF   <- gtools::quantcut(COF$nsj, q=seq(0,1,length=10))
-COF$nsjFL  <- plyr::ddply(COF,"nsjF",transform,nsjFL=mean(nsj))$nsjFL
+# COF$nsjF   <- gtools::quantcut(COF$nsj, q=seq(0,1,length=10))
+# COF$nsjFL  <- plyr::ddply(COF,"nsjF", transform,nsjFL=mean(nsj))$nsjFL
 
-#save(COF, file="power.rda")
+save(COF, file="power.rda")
 ```
 
 
 ## Plot results
 
 ```{r load-cached-power-file}
-#load(file="power.rda")
+load(file="power.rda")
 ```
 
 Generate some subsetted data frames for plotting:
@@ -277,115 +291,108 @@ COF_small_effects <- COF %>%
 ```
 
 
-### Power by N of subjects
+### Power by N of subjects & effect size
 
-```{r plot_subjects_function}
-power_plots_subjects <- function(dat) {
+
+```{r plot_effect_sizes_function}
+power_plot_effects <- function(dat, sign, predictor, plottitle) {
+  p <- ggplot(data=dat) +
+    geom_smooth(aes(x=nsj, y=eval(parse(text = sign)),
+                    color=factor(eval(parse(text = predictor))),
+                    fill=factor(eval(parse(text = predictor)))),
+                method="loess", se=TRUE)+
+    geom_point(   stat="summary", aes(x=nsj, y=eval(parse(text = sign)),
+                                      colour=factor(eval(parse(text = predictor))))) +
+    geom_errorbar(stat="summary", aes(x=nsj, y=eval(parse(text = sign)),
+                                      colour=factor(eval(parse(text = predictor))))) +
+    geom_line(    stat="summary", aes(x=nsj, y=eval(parse(text = sign)),
+                                      colour=factor(eval(parse(text = predictor))))) +
+    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
+    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
+    ggtitle(plottitle) + 
+    xlab("N subjects") +
+    ylab("Power") +
+    labs(color = "Effect size") +
+    theme_minimal() + 
+    guides(fill = "none")
+  return(p)
+}
+
+effects_plots <- function(dat) {
   
   # Extract maximal y axis range to make the two plots comparable side by side
   y_range <- range(c(dat$sign1, dat$sign2, dat$sign3), na.rm = TRUE)
   
-  # Visualize results for Cloze
-  p1 <- ggplot(data = dat) +
-    geom_smooth(aes(x = nsj, y = sign1), method="loess") +
-    geom_point(   stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
-    geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
-    geom_line(    stat = "summary", aes(x = nsjFL, y = sign1), fun.data = mean_se) +
-    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
-    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
-    ggtitle("Power for Cloze Probability") +
-    theme_minimal()
-  
-  # Visualize results for Task
-  p2 <- ggplot(data = dat) +
-    geom_smooth(aes(x = nsj, y = sign2), method="loess") +
-    geom_point(   stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
-    geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
-    geom_line(    stat = "summary", aes(x = nsjFL, y = sign2), fun.data = mean_se) +
-    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
-    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
-    ggtitle("Power for Task") +
-    theme_minimal()
-  
-  # Visualize results for the Cloze:Task interaction
-  p3 <- ggplot(data = dat) +
-    geom_smooth(aes(x = nsj, y = sign3), method="loess") +
-    geom_point(   stat = "summary", aes(x = nsjFL, y = sign3), fun.data = mean_se) +
-    geom_errorbar(stat = "summary", aes(x = nsjFL, y = sign3), fun.data = mean_se) +
-    geom_line(    stat = "summary", aes(x = nsjFL, y = sign3), fun.data = mean_se) +
-    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
-    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
-    ggtitle("Power for the Interaction") +
-    theme_minimal()
+  p1 <- power_plot_effects(dat, "sign1", "cloze", "Power for Cloze Probability")
+  p2 <- power_plot_effects(dat, "sign2", "task", "Power for Task")
+  p3 <- power_plot_effects(dat, "sign3", "interact", "Power for the Interaction")
   
   p1 <- p1 + coord_cartesian(ylim = y_range)
   p2 <- p2 + coord_cartesian(ylim = y_range)
   p3 <- p3 + coord_cartesian(ylim = y_range)
   
   suppressMessages({
-    gridExtra::grid.arrange(p1, p2, p3, nrow = 1)
+    p <- gridExtra::grid.arrange(p1, p2, p3, nrow = 1)
+    p
   })
   
+  return(p)
 }
 ```
 
 Plot for the maximal number of items:
 
-```{r plot_subjects_max}
-# Plot for the maximal effects + max n of items
-COF_subjects <- filter(COF_large_effects, nit == max(nit))
-power_plots_subjects(COF_subjects)
+```{r plot_effect_sizes_max}
+COF_max_items <- filter(COF, nit == max(nit))
+p <- effects_plots(COF_max_items)
+ggsave("./plots/power_by_effectsize_maxitems.png", plot = p,
+       width=14, height=5, dpi=320)
 ```
 
 Plot for the minimal number of items:
 
-```{r plot_subjects_min}
-# Plot for the smallest effects + max n of items
-COF_subjects <- filter(COF_small_effects, nit == max(nit))
-power_plots_subjects(COF_subjects)
+```{r plot_effect_sizes_min}
+COF_min_items <- filter(COF, nit == min(nit))
+p <- effects_plots(COF_min_items)
+ggsave("./plots/power_by_effectsize_minitems.png", plot = p,
+       width=14, height=5, dpi=320)
 ```
 
 
 ### Power by N of subjects & N of items
 
 ```{r plot_items_function}
-power_plots_items <- function(dat) {
+power_plot_items <- function(dat, sign, predictor, plottitle) {
+  p <- ggplot(data=dat) +
+    geom_smooth(aes(x=nsj, y=eval(parse(text = sign)),
+                    color=factor(nit),
+                    fill=factor(nit)),
+                method="loess", se=FALSE)+
+    geom_point(   stat="summary", aes(x=nsj, y=eval(parse(text = sign)),
+                                      colour=factor(nit))) +
+    geom_errorbar(stat="summary", aes(x=nsj, y=eval(parse(text = sign)),
+                                      colour=factor(nit))) +
+    geom_line(    stat="summary", aes(x=nsj, y=eval(parse(text = sign)),
+                                      colour=factor(nit))) +
+    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
+    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
+    ggtitle(plottitle) + 
+    xlab("N subjects") +
+    ylab("Power") +
+    labs(color = "N items") +
+    theme_minimal() + 
+    guides(fill = "none")
+  return(p)
+}
+
+items_plots <- function(dat) {
   
   # Extract maximal y axis range to make the two plots comparable side by side
   y_range <- range(c(dat$sign1, dat$sign2, dat$sign3), na.rm = TRUE)
 
-  p1 <- ggplot(data=dat) +
-    geom_smooth(aes(x=nsj, y=sign1, colour=factor(nit), fill=factor(nit)),
-                method="loess", se=FALSE)+
-    geom_point(   stat="summary", aes(x=nsjFL, y=sign1, colour=factor(nit)))+
-    geom_errorbar(stat="summary", aes(x=nsjFL, y=sign1, colour=factor(nit)))+
-    geom_line(    stat="summary", aes(x=nsjFL, y=sign1, colour=factor(nit)))+
-    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
-    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
-    ggtitle("Power for Cloze Probability") + 
-    theme_minimal()
-    
-  p2 <- ggplot(data=dat) +
-    geom_smooth(aes(x=nsj, y=sign2, colour=factor(nit), fill=factor(nit)),
-                method="loess", se=FALSE)+
-    geom_point(   stat="summary", aes(x=nsjFL, y=sign2, colour=factor(nit)))+
-    geom_errorbar(stat="summary", aes(x=nsjFL, y=sign2, colour=factor(nit)))+
-    geom_line(    stat="summary", aes(x=nsjFL, y=sign2, colour=factor(nit)))+
-    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
-    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
-    ggtitle("Power for Task") + 
-    theme_minimal()
-    
-  p3 <- ggplot(data=dat) +
-    geom_smooth(aes(x=nsj, y=sign3, colour=factor(nit), fill=factor(nit)),
-                method="loess", se=FALSE)+
-    geom_point(   stat="summary", aes(x=nsjFL, y=sign3, colour=factor(nit)))+
-    geom_errorbar(stat="summary", aes(x=nsjFL, y=sign3, colour=factor(nit)))+
-    geom_line(    stat="summary", aes(x=nsjFL, y=sign3, colour=factor(nit)))+
-    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
-    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
-    ggtitle("Power for the Interaction") + 
-    theme_minimal()
+  p1 <- power_plot_items(dat, "sign1", "cloze", "Power for Cloze Probability")
+  p2 <- power_plot_items(dat, "sign2", "task", "Power for Task")
+  p3 <- power_plot_items(dat, "sign3", "interact", "Power for the Interaction")
   
   p1 <- p1 + coord_cartesian(ylim = y_range)
   p2 <- p2 + coord_cartesian(ylim = y_range)
@@ -400,80 +407,17 @@ power_plots_items <- function(dat) {
 Plot for the maximal effects:
 
 ```{r plot_items_max}
-power_plots_items(COF_large_effects)
+p <- items_plots(COF_large_effects)
+ggsave("./plots/power_by_items_maxeffects.png", plot = p,
+       width=14, height=5, dpi=320)
 ```
 
 Plot for the smallest effects:
 
 ```{r plot_items_min}
-power_plots_items(COF_small_effects)
-```
-
-
-### Power by N of subjects & effect size
-
-
-```{r plot_effect_sizes_function}
-power_plots_effects <- function(dat) {
-  
-  # Extract maximal y axis range to make the two plots comparable side by side
-  y_range <- range(c(dat$sign1, dat$sign2, dat$sign3), na.rm = TRUE)
-
-  p1 <- ggplot(data=dat) +
-    geom_smooth(aes(x=nsj, y=sign1, color=factor(cloze), fill=factor(cloze)),
-                method="loess", se=TRUE)+
-    geom_point(   stat="summary", aes(x=nsjFL, y=sign1, colour=factor(cloze)))+
-    geom_errorbar(stat="summary", aes(x=nsjFL, y=sign1, colour=factor(cloze)))+
-    geom_line(    stat="summary", aes(x=nsjFL, y=sign1, colour=factor(cloze)))+
-    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
-    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
-    ggtitle("Power for Cloze Probability") + 
-    theme_minimal()
-  
-  p2 <- ggplot(data=dat) +
-    geom_smooth(aes(x=nsj, y=sign2, color=factor(task), fill=factor(task)),
-                method="loess", se=TRUE)+
-    geom_point(   stat="summary", aes(x=nsjFL, y=sign2, colour=factor(task)))+
-    geom_errorbar(stat="summary", aes(x=nsjFL, y=sign2, colour=factor(task)))+
-    geom_line(    stat="summary", aes(x=nsjFL, y=sign2, colour=factor(task)))+
-    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
-    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
-    ggtitle("Power for Task") + 
-    theme_minimal()
-  
-  p3 <- ggplot(data=dat) +
-    geom_smooth(aes(x=nsj, y=sign3, color=factor(interact), fill=factor(interact)),
-                method="loess", se=TRUE)+
-    geom_point(   stat="summary", aes(x=nsjFL, y=sign3, colour=factor(interact)))+
-    geom_errorbar(stat="summary", aes(x=nsjFL, y=sign3, colour=factor(interact)))+
-    geom_line(    stat="summary", aes(x=nsjFL, y=sign3, colour=factor(interact)))+
-    geom_hline(yintercept = 0.8, color = "red", linetype = "dashed") +
-    geom_hline(yintercept = 1, color = "darkgreen", linetype = "solid") +
-    ggtitle("Power for the Interaction") + 
-    theme_minimal()
-  
-  p1 <- p1 + coord_cartesian(ylim = y_range)
-  p2 <- p2 + coord_cartesian(ylim = y_range)
-  p3 <- p3 + coord_cartesian(ylim = y_range)
-  
-  suppressMessages({
-    gridExtra::grid.arrange(p1, p2, p3, nrow = 1)
-  })
-}
-```
-
-Plot for the maximal number of items:
-
-```{r plot_effect_sizes_max}
-COF_max_items <- filter(COF, nit == max(nit))
-power_plots_effects(COF_max_items)
-```
-
-Plot for the minimal number of items:
-
-```{r plot_effect_sizes_min}
-COF_min_items <- filter(COF, nit == min(nit))
-power_plots_effects(COF_min_items)
+p <- items_plots(COF_small_effects)
+ggsave("./plots/power_by_items_mineffects.png", plot = p,
+       width=14, height=5, dpi=320)
 ```
 
 
@@ -483,70 +427,38 @@ Determine the number of subjects needed for each effect to reach a power of 80%:
 
 ```{r power_threshold_function}
 power_threshold <- function(effect_name, effect_vector, sign) {
+  
+  print(toupper(effect_name))
+  
   for (i in 1:length(effect_vector)) {
     current <- effect_vector[i]
-    COF_current <- filter(COF, eval(parse(text=effect_name))==current)
-    
+    COF_current <- COF %>%
+      filter(eval(parse(text=effect_name))==current) %>% 
+      filter(nit == max(nit))
+
     m0 <- loess(eval(parse(text=sign)) ~ nsj, data=COF_current)
-    COF$pred <- predict(m0)
-    idx <- COF$pred>0.8
-    min_effect <- ifelse(length(COF$nsj[idx]) > 0, min(COF$nsj[idx]), FALSE)
-  
+    COF_current$pred <- predict(m0)
+    idx <- COF_current$pred>0.8
+    min_effect <- ifelse(length(COF_current$nsj[idx]) > 0,
+                         min(COF_current$nsj[idx]), FALSE)
+
     cat("Effect size:", current,
       "-> min required subjects:",
-      min_effect, sep=" ", end="\n\n")
+      min_effect, sep=" ", end="\n")
   }
 }
 ```
 
 ```{r calculate_80_power}
-print("Cloze:")
+print("Minimum of required subject to reach >80 power for each effect size (for the maximum number of items):")
 power_threshold("cloze", cloze_fixed, "sign1")
-print("Task:")
 power_threshold("task", task_fixed, "sign2")
-print("Cloze-Task Interaction:")
 power_threshold("interact", interaction_fixed, "sign3")
 ```
 
-```{r check_power_80%, eval=FALSE, include=FALSE}
-for (e in 1:length(cloze_fixed)) {
-  
-  cloze_current <- cloze_fixed[e]
-  task_current <- task_fixed[e]
-  interact_current <- interaction_fixed[e]
-  
-  COF_current <- filter(COF, cloze==cloze_current)
-  COF_current <- filter(COF_current, task==task_current)
-  COF_current <- filter(COF_current, interact==interact_current)
-  
-  # Cloze:
-  m0 <- loess(sign1 ~ nsj, data=COF_current)
-  COF$pred <- predict(m0)
-  idx <- COF$pred>0.8
-  min_cloze <- min(COF$nsj[idx])
-  
-  cat("Cloze effect size:", cloze_current,
-      " -> min required subjects:",
-      min_cloze, sep=" ", end="\n")
+Finish sound (play a different sound when finished, to indicate that knitting is done for the Rmd file).
 
-  # Task:
-  m0 <- loess(sign2 ~ nsj, data=COF_current)
-  COF$pred <- predict(m0)
-  idx <- COF$pred>0.8
-  min_task <- min(COF$nsj[idx])
-  
-  cat("Task effect size:", task_current,
-      "        -> min required subjects:",
-      min_task, sep=" ", end="\n")
-  
-  # Interaction:
-  m0 <- loess(sign3 ~ nsj, data=COF_current)
-  COF$pred <- predict(m0)
-  idx <- COF$pred>0.8
-  min_interact <- ifelse(length(COF$nsj[idx]) > 0, min(COF$nsj[idx]), FALSE)
-  
-  cat("Interaction effect size:", interact_current,
-      "-> min required subjects:",
-      min_interact, sep=" ", end="\n\n")
-}
+```{r}
+beepr::beep(5)
 ```
+
