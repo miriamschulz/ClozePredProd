@@ -165,10 +165,10 @@ completeness <- dat %>%
   unique()
 
 # All items
-xtabs(~ Item, completeness)  # should show N participants everywhere
+range(xtabs(~ Item, completeness))  # should show N participants
 
 # Items by subject
-xtabs(~ UniqueID + Item, completeness)  # should show 1 everywhere
+range(xtabs(~ UniqueID + Item, completeness))  # should range from 1 to 1
 
 # Task by subject
 xtabs(~ UniqueID + Task, completeness)  # should show 80 everywhere
@@ -180,12 +180,23 @@ xtabs(~ UniqueID + Block, completeness)  # should show 40 everywhere
 xtabs(~ Item + LatinList, completeness)  # N subjects per list everywhere
 
 # List by subject
-xtabs(~ UniqueID + LatinList, completeness)  # must show 160 or 0 everywhere
+# xtabs(~ UniqueID + LatinList, completeness)  # must show 160 or 0 everywhere
+completeness %>%
+  select(LatinList, UniqueID) %>%
+  arrange(LatinList) %>% 
+  unique()
 
 # Random order
 xtabs(~ RandomOrder + LatinList, completeness)  # should show 160 or 0; multiples of 160 mean some subjects ran the same order
+range(xtabs(~ RandomOrder + LatinList, completeness))
 
-# Sort by time (useful to get the latest RandomOrder used, i.e. counter state):
+# Random Order by List
+completeness %>% 
+  select(LatinList, RandomOrder) %>% 
+  unique() %>% 
+  arrange(LatinList, RandomOrder)
+
+# RandomOrder by time (useful to get the latest RandomOrder used, i.e. counter state):
 completeness %>% 
   select(LatinList, RandomOrder) %>% 
   unique()
@@ -468,8 +479,6 @@ if (use_subset == TRUE) {
 ```
 
 
-
-
 # RT Plots
 
 ## Bar plot
@@ -538,13 +547,12 @@ dat_plot <- summarySE(dat,
                       measurevar="RT",
                       groupvars=c("Region", "ExpCondition", "Task"),
                       na.rm=T)
-dat_plot <- droplevels(dat_plot)
-dat_plot$Task_Condition <- interaction(dat_plot$ExpCondition, dat_plot$Task)
 
 ggplot(data = dat_plot,
        aes(x = Region,
            y = RT,
-           color = interaction(Task, ExpCondition),
+           # color = interaction(Task, ExpCondition),
+           color = ExpCondition,
            linetype = Task,
            group = ExpCondition)) +
   geom_line(linewidth = 1) +
@@ -556,24 +564,24 @@ ggplot(data = dat_plot,
   xlab("Region") +
   ylab("Reading Time (ms)") +
   ggtitle("Reading Times by Task") +
-  # labs(color = "Expectancy") +
-  # scale_color_manual(values = c("navy", "steelblue1")) +
-  scale_color_manual(
-    name = "Task and Condition", # Legend title
-    values = c("Comprehension.High" = "navy",
-               "Comprehension.Low" = "steelblue1",
-               "Production.High" = "seagreen4",
-               "Production.Low" = "#8de0a4"
-               ),
-    labels = c("HIGH - Comprehension", "LOW - Comprehension",
-               "HIGH - Production", "LOW - Production"),
-    breaks = c("Comprehension.High", "Comprehension.Low",
-               "Production.High", "Production.Low"),
-    guide = guide_legend(override.aes = list(linetype = c(1, 1, 2, 2)))
-  ) +
-  scale_linetype_manual(values = c("Comprehension" = "solid",
-                                   "Production" = "dashed"),
-                        guide = FALSE) +
+  labs(color = "Expectancy") +
+  scale_color_manual(values = c("navy", "steelblue1")) +
+  # scale_color_manual(
+  #   name = "Task and Condition", # Legend title
+  #   values = c("Comprehension.High" = "navy",
+  #              "Comprehension.Low" = "steelblue1",
+  #              "Production.High" = "seagreen4",
+  #              "Production.Low" = "#8de0a4"
+  #              ),
+  #   labels = c("HIGH - Comprehension", "LOW - Comprehension",
+  #              "HIGH - Production", "LOW - Production"),
+  #   breaks = c("Comprehension.High", "Comprehension.Low",
+  #              "Production.High", "Production.Low"),
+  #   guide = guide_legend(override.aes = list(linetype = c(1, 1, 2, 2)))
+  # ) +
+  # scale_linetype_manual(values = c("Comprehension" = "solid",
+  #                                  "Production" = "dashed"),
+  #                       guide = FALSE) +
   theme_minimal() +
   theme(
     axis.title.x = element_text(size = 14, face = "bold"),
@@ -583,9 +591,7 @@ ggplot(data = dat_plot,
     plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
     legend.title = element_text(size = 14),
     legend.text = element_text(size = 12),
-    legend.key.width = unit(1.5, "cm"),
-    # legend.key.height = unit(0.5, "cm"),
-    # legend.position = "none",
+    legend.key.width = unit(1, "cm"),
     strip.text = element_text(size = 16, face = "bold"),
     plot.background = element_rect(fill = "white", color = NA)
   )
