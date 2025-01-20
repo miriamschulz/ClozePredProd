@@ -21,11 +21,9 @@ This script preprocesses the raw PC Ibex results of the Cloze prediction & produ
 What this script does:
 
 - split the data into a production and a comprehension data set
-- check data for completeness
-- calculate by-participant and overall accuracy
-- calculate by-participant and overall production RTs
 - summary of demographics
 - summary of post-experimental survey
+- check by-participant and overall accuracy
 - export preprocessed data as `results_preprocessed.csv`
 
 
@@ -70,6 +68,7 @@ read.pcibex <- function(filepath, auto.colnames=TRUE, fun.col=function(col,cols)
 }
 
 convert_to_hours <- function(minutes) {
+  #if (is.na(minutes)) {return(NA)}
   minutes <- round(minutes)
   hours <- minutes %/% 60 %/% 60
   remaining_minutes <- (minutes %/% 60) - hours*60
@@ -164,7 +163,6 @@ df.demogs %>%
 
 ```{r}
 write.csv(df.demogs, "demographics.csv", row.names=FALSE)
-
 ```
 
 

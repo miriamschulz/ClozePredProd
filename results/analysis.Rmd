@@ -136,7 +136,8 @@ dat <- dat %>%
   filter(!UniqueID %in% c("vuqqnd", "ee49u2", "vznkz3",
                           "3jw4ew", "ps4dv4")) %>%  # nonnatives Prolific Exp 1
   filter(!UniqueID %in% c("icak56", "2jcruh", "8v42p8", "e2zqww",
-                          "0jxphp", "m7ugwz", "jocpf0")) # non-natives / failed the task on Prolific exp 2
+                          "0jxphp", "m7ugwz", "jocpf0", "pizxpx",
+                          "hpttkp")) # non-natives / failed the task on Prolific exp 2
 ```
 
 
@@ -196,15 +197,15 @@ completeness %>%
   unique() %>% 
   arrange(LatinList, RandomOrder)
 
-# RandomOrder by time (useful to get the latest RandomOrder used, i.e. counter state):
-completeness %>% 
-  select(LatinList, RandomOrder) %>% 
-  unique()
-
 # Random order sorted by subject
 completeness %>%
   select(UniqueID, RandomOrder) %>%
   arrange(UniqueID) %>% 
+  unique()
+
+# Random order by subject+list (useful to get the latest RandomOrder used, i.e. counter state):
+completeness %>% 
+  select(UniqueID, RandomOrder, LatinList) %>% 
   unique()
 
 # Subjects per list
@@ -1120,24 +1121,20 @@ for (region in c("pre-critical", "target", "spill1", "spill2")) {
 
 dat_coef$Region <- factor(dat_coef$Region, levels = c("pre-critical","target",
                                                       "spill1", "spill2"))
-# dat_coef$jittered_x <- jitter(as.numeric(dat_coef$Region), amount = 0.2)
 
 ggplot(dat_coef, aes(x = Region, y = estimate,
                      color = term)) +
-  # geom_jitter(aes(shape = p.value < 0.05), size = 3, width = 0.2) +
   geom_errorbar(aes(ymin = estimate - std.error,
                     ymax = estimate + std.error),
-                width=0.1, size=0.1, color = "black") +
-                # position = position_jitter(width = 0.2)) +
-  # scale_x_discrete(breaks = 1:length(levels(dat_coef$Region)),
-  #                  labels = levels(dat_coef$Region)) + 
+                width=0.1, linewidth=0.1, color = "black") +
   geom_point(aes(shape = p.value < 0.05), size = 3) +
   geom_hline(yintercept = 0, color = "black") +
   scale_shape_manual(values = c(13, 19)) +
   scale_color_brewer(palette = "Set1") +
   labs(title = "Model Coefficients",
-       x = "Predictor",
-       y = "Coefficient Estimate") +
+       x = "Region",
+       y = "Coefficient Estimate",
+       color = "Predictor") +
   theme_minimal()
 ```
 
