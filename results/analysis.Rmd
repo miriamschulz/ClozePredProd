@@ -19,16 +19,37 @@ Libraries:
 rm(list = ls())
 library(tidyverse)
 library(ggplot2)
-library(ggpattern)
+library(RColorBrewer)
 library(gridExtra)
 library(Rmisc)
 library(lme4)
 library(lmerTest)
 ```
 
-Custom functions:
+Some script parameters that will determine which sections of the script will / will not be run:+
 
 ```{r}
+# Remove bad participants (non-native, failed task etc)?
+exclude_participants = TRUE
+
+# Use only a subset of strong items with the minimal specified Cloze difference:
+strong_item_subset = FALSE
+cloze_difference <- 0.5
+
+# Limit how many/which plots to generate:
+exit_after_first_rt_plot = FALSE
+plot_by_subject_rts = TRUE
+plot_by_item_rts = TRUE
+plot_inidividual_items = FALSE
+
+# Quit before running the models:
+run_models = TRUE
+```
+
+
+Custom functions:
+
+```{r define-functions}
 preprocess_data <- function(df) {
   
   # Annotate the region 
@@ -123,7 +144,7 @@ remove_outliers_subj_sd <- function(df, sd_threshold=3) {
 
 Read data:
 
-```{r}
+```{r read-data}
 # Read preprocessed dfs
 dat <- read.csv("results_preprocessed.csv", header=TRUE)
 ```
@@ -131,19 +152,30 @@ dat <- read.csv("results_preprocessed.csv", header=TRUE)
 
 Remove subjects to be excluded:
 
-```{r}
-dat <- dat %>%
-  filter(!UniqueID %in% c("vuqqnd", "ee49u2", "vznkz3",
-                          "3jw4ew", "ps4dv4")) %>%  # nonnatives Prolific Exp 1
-  filter(!UniqueID %in% c("icak56", "2jcruh", "8v42p8", "e2zqww",
-                          "0jxphp", "m7ugwz", "jocpf0", "pizxpx",
-                          "hpttkp")) # non-natives / failed the task on Prolific exp 2
+```{r exclude-participants}
+if (exclude_participants == TRUE) {
+  dat <- dat %>%
+    # nonnatives Prolific Exp 1
+    filter(!UniqueID %in% c("vuqqnd", "ee49u2", "vznkz3",
+                            "3jw4ew", "ps4dv4")) %>%  
+    # non-natives / failed the task on Prolific exp 2:
+    filter(!UniqueID %in% c("2jcruh", "e2zqww",
+                            "0jxphp", "m7ugwz", "jocpf0", "pizxpx",
+                            "hpttkp")) %>% 
+    # MAYBE non-natives in Prolific exp 2:
+    filter(!UniqueID %in% c("icak56", "8v42p8", "bdhmxy", "glbu6a",
+                            "6wqbuo")) %>% 
+    filter(!UniqueID %in% c("-u775t")) %>%  # technical problems: restarted 3x
+    filter(!UniqueID %in% c("ev0tqj")) %>% # read contexts aloud in one prod block
+    filter(!UniqueID %in% c("4ftnhn")) %>%  # no server data; born in Ghana
+    filter(!UniqueID %in% c("teg94q"))  # comp accuracy ~50% and too many timeouts
+}
 ```
 
 
 Extract critical regions & first check of RTs:
 
-```{r}
+```{r preprocess-data}
 dat <- preprocess_data(dat)
 dat %>% 
   filter(ExpCondition %in% c("High", "Low")) %>% 
@@ -155,7 +187,7 @@ dat %>%
 
 ## Data completeness check
 
-```{r}
+```{r completeness-checks}
 # Experimental conditions per subject
 xtabs(~ UniqueID + ExpCondition, droplevels(filter(dat, Region == "target" &
                                             ExpCondition %in% c("High", "Low"))))
@@ -191,9 +223,9 @@ completeness %>%
 xtabs(~ RandomOrder + LatinList, completeness)  # should show 160 or 0; multiples of 160 mean some subjects ran the same order
 range(xtabs(~ RandomOrder + LatinList, completeness))
 
-# Random Order by List
+# Random Order by sorted by List
 completeness %>% 
-  select(LatinList, RandomOrder) %>% 
+  select(LatinList, RandomOrder, UniqueID) %>% 
   unique() %>% 
   arrange(LatinList, RandomOrder)
 
@@ -216,10 +248,10 @@ xtabs(~ LatinList, completeness) / n_trials
 
 ## Comprehension question accuracy
 
-```{r}
+```{r question-accuracy}
 dat_acc <- dat %>%
   filter(!is.na(CorrectAnswer)) %>%
-  select(CorrectAnswer, UniqueID, Item) %>% 
+  select(CorrectAnswer, UniqueID, LatinList, Item) %>% 
   unique()
   #filter(Region == "target")
 dat_acc$TrialAccuracy <- ifelse(dat_acc$CorrectAnswer == "true", 1, 0)
@@ -229,9 +261,9 @@ table(xtabs(~ UniqueID, dat_acc)) # should equal N of comp trials with Q in the 
 
 # Acc for all trials
 dat_acc_subj <- dat_acc %>%
-  dplyr::group_by(UniqueID) %>%
+  dplyr::group_by(UniqueID, LatinList) %>%
   dplyr::summarize(Accuracy = mean(TrialAccuracy))
-dat_acc_subj
+# dat_acc_subj
 round(range(dat_acc_subj$Accuracy), 2)
 round(mean(dat_acc_subj$Accuracy), 2)
 ```
@@ -251,33 +283,44 @@ dat %>%
 Plot the accuracy for fast visual inspection:
 
 ```{r accuracy-subjects-plot, fig.height=7, fig.width=10}
+dat_acc_subj$UniqueID <- factor(dat_acc_subj$UniqueID, 
+                                levels = dat_acc_subj$UniqueID[order(dat_acc_subj$Accuracy,
+                                                                     dat_acc_subj$LatinList,
+                                                                     decreasing = TRUE)])
+
 ggplot(data=dat_acc_subj,
-       aes(UniqueID, Accuracy, fill=UniqueID)) + 
+       aes(UniqueID, Accuracy, fill=as.factor(LatinList))) + 
   geom_bar(stat="identity",
            width=1,
-           show.legend=FALSE) +
+           show.legend=TRUE,
+           color = "black",
+           alpha = 0.5) +
   geom_hline(yintercept = 0.7, linetype = "dashed", color = "black",
              linewidth = 0.8) +
   annotate("text",
            x = length(unique(dat_acc_subj$UniqueID)) / 2, y = 0.72,
            label = "70% accuracy",
-           color = "black", angle = 0) +
+           color = "black", size = 8, fontface = "bold",
+           angle = 0) +
   labs(title = "Mean accuracy by subject", 
        subtitle = "All experimental trials, practice excluded", 
        x = "Subject", 
-       y = "Mean accuracy") +
+       y = "Mean accuracy",
+       fill = "List") +
+  scale_fill_manual(values=c("plum4", "steelblue4", "gray40", "darkred",
+                             "plum2", "lightsteelblue", "gray70",
+                             "lightcoral")) +
   theme_minimal() +
   theme(
     axis.title.x = element_text(size = 14, face = 'bold'),
     axis.title.y = element_text(size = 14, face = 'bold'),
     axis.text.x = element_text(size = 12, face = 'bold', angle = 90,
-                               vjust = 0.5, hjust = 1, margin = margin(t = 5)),
+                               vjust = 0.5, hjust = 1),
     axis.text.y = element_text(size = 12),
     plot.title = element_text(size = 25, face = 'bold', hjust = 0.5),
     plot.subtitle = element_text(size = 16, face = "italic", hjust = 0.5)
   )
 ```
-
 
 
 ## Production timeouts
@@ -449,10 +492,7 @@ write.csv(dat, "results_preprocessed_filtered.csv", row.names=FALSE)
 Set `use_subset = TRUE` here to look only at the "strongest" items in terms of Cloze probability in the entire following script.
 
 ```{r subset-strong-items}
-use_subset = FALSE
-cloze_difference <- 0.7
-
-if (use_subset == TRUE) {
+if (strong_item_subset == TRUE) {
   
   dat_strong <- dat %>% 
     dplyr::group_by(Item, ExpCondition) %>%
@@ -484,7 +524,7 @@ if (use_subset == TRUE) {
 
 ## Bar plot
 
-```{r rt-bar-plot}
+```{r rt-bar-plot, fig.height=5, fig.width=12}
 # Generate a summary data frame including the SE:
 dat_plot <- summarySE(filter(dat, !(Region %in% c("other"))),
                       measurevar="RT",
@@ -602,7 +642,16 @@ ggsave("./plots/RTs.png", plot = last_plot(),
 ```
 
 
-## Line plot by experimental half & task
+
+```{r exit-before-plots}
+if (exit_after_first_rt_plot == TRUE) {
+  knitr::knit_exit()
+}
+```
+
+
+
+## Plot by experimental half & task
 
 ```{r rt-line-plot-taskorder, fig.height=5, fig.width=8}
 # Generate a summary data frame including the SE:
@@ -647,145 +696,34 @@ ggsave("./plots/RTs_task_order.png", plot = last_plot(),
 ```
 
 
-## RTs by subject
+## Plot all subjects
 
 ```{r rt-subj-plot, fig.height=10, fig.width=15}
-# Generate a summary data frame including the SE:
-dat_plot <- summarySE(dat,
-                      measurevar="RT",
-                      groupvars=c("Region", "ExpCondition",
-                                  "Task", "UniqueID"),
-                      na.rm=T)
-
-ggplot(data = dat_plot,
-       aes(x = Region,
-           y = RT,
-           color = ExpCondition,
-           linetype = Task,
-           group = interaction(ExpCondition, Task))) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
-  geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
-                width = 0.2, 
-                linewidth = 0.5) +
-  facet_wrap(~UniqueID) +
-  labs(color = "Expectancy") +
-  xlab("Region") +
-  ylab("Reading Time (ms)") +
-  ggtitle("Reading Times by Subject") +
-  theme_minimal() +
-  theme(
-    axis.title.x = element_text(size = 14, face = "bold"),
-    axis.title.y = element_text(size = 14, face = "bold"),
-    axis.text.x = element_text(size = 12),
-    axis.text.y = element_text(size = 12),
-    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
-    legend.title = element_text(size = 14),
-    legend.text = element_text(size = 12),
-    strip.text = element_text(size = 14, face = "bold"),
-    plot.background = element_rect(fill = "white", color = NA)
-  ) +
-  scale_color_manual(values = c("navy", "steelblue1"))
-
-ggsave("./plots/RTs_subjects.png", plot = last_plot(),
-       width=15, height=12, dpi=320)
-```
-
-
-## Line plot by item
-
-```{r rt-item-plot, fig.height=10, fig.width=15}
-# Generate a summary data frame including the SE:
-dat_plot <- summarySE(dat,
-                      measurevar="RT",
-                      groupvars=c("Region", "ExpCondition",
-                                  "Task", "ExpItemNum"),
-                      na.rm=T)
-
-ggplot(data = dat_plot,
-       aes(x = Region,
-           y = RT,
-           color = ExpCondition,
-           linetype = Task,
-           group = interaction(ExpCondition, Task))) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 2) +
-  geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
-                width = 0.2, 
-                linewidth = 0.5) +
-  # facet_wrap(~ExpItemNum+Task) +
-  facet_wrap(~ExpItemNum) +
-  labs(color = "Expectancy") +
-  xlab("Region") +
-  ylab("Reading Time (ms)") +
-  ggtitle("Reading Times by Item") +
-  theme_minimal() +
-  theme(
-    axis.title.x = element_text(size = 14, face = "bold"),
-    axis.title.y = element_text(size = 14, face = "bold"),
-    axis.text.x = element_text(size = 12),
-    axis.text.y = element_text(size = 12),
-    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
-    legend.title = element_text(size = 14),
-    legend.text = element_text(size = 12),
-    strip.text = element_text(size = 14, face = "bold"),
-    plot.background = element_rect(fill = "white", color = NA)
-  ) +
-  scale_color_manual(values = c("navy", "steelblue1"))
-
-ggsave("./plots/RTs_items.png", plot = last_plot(),
-       width=30, height=20, dpi=320)
-```
-
-
-## Individual item plots
-
-```{r item-plots-individual, eval = FALSE}
-dat_plot <- summarySE(dat_all,
-                      measurevar="RT",
-                      groupvars=c("Region", "ExpCondition",
-                                  "Task", "Item",
-                                  "WordPosition", "Word"),
-                      na.rm=T)
-dat_plot$WordPosition <- as.numeric(dat_plot$WordPosition)
-summary(dat_plot$WordPosition)
-
-# for (i in c(1:80, 1001:1080)) {
-for (i in unique(as.numeric(as.character(dat_plot$Item)))) {
-  dat_plot_item <- dat_plot %>% 
-    filter(Item == i) %>% 
-    group_by(WordPosition) %>%
-    mutate(Word = if_else(
-      WordPosition == 6,
-      paste(unique(Word[WordPosition == 6]), collapse = "/"),
-      Word)) %>%
-    ungroup()
-  item_no_char <- as.character(unique(dat_plot_item$Item))
+if (plot_by_subject_rts == TRUE) {
   
-  p <- ggplot(dat_plot_item,
-              aes(x = WordPosition,
-              y = RT,
-              color = ExpCondition,
-              linetype = Task,
-              group = interaction(ExpCondition, Task))) +
+  # Generate a summary data frame including the SE:
+  dat_plot <- summarySE(dat,
+                        measurevar="RT",
+                        groupvars=c("Region", "ExpCondition",
+                                    "Task", "UniqueID"),
+                        na.rm=T)
+  
+  p <- ggplot(data = dat_plot,
+         aes(x = Region,
+             y = RT,
+             color = ExpCondition,
+             linetype = Task,
+             group = interaction(ExpCondition, Task))) +
     geom_line(linewidth = 1) +
     geom_point(size = 2) +
     geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
                   width = 0.2, 
                   linewidth = 0.5) +
-    {if (as.numeric(item_no_char) < 1000)
-         annotate("rect", xmin = 5.5, xmax = 8.5, ymin = -Inf, ymax = Inf, 
-             fill = "gray", alpha = 0.3)} +
-    labs(color = "Expectancy",
-         title = paste0("Reading Times: Item ", item_no_char)) +
-    scale_x_continuous(
-      name = "Word Position",
-      breaks = dat_plot_item$WordPosition,
-      sec.axis = sec_axis(~ ., name = "Word",
-                          breaks = dat_plot_item$WordPosition,
-                          labels = dat_plot_item$Word)
-    ) +
+    facet_wrap(~UniqueID) +
+    labs(color = "Expectancy") +
+    xlab("Region") +
     ylab("Reading Time (ms)") +
+    ggtitle("Reading Times by Subject") +
     theme_minimal() +
     theme(
       axis.title.x = element_text(size = 14, face = "bold"),
@@ -799,9 +737,132 @@ for (i in unique(as.numeric(as.character(dat_plot$Item)))) {
       plot.background = element_rect(fill = "white", color = NA)
     ) +
     scale_color_manual(values = c("navy", "steelblue1"))
+  print(p)
   
-  plot_title <- paste0("./plots/item_plots/item_", as.character(i), ".png")
-  ggsave(plot_title, plot = p, width=12, height=5, dpi=320)
+  ggsave("./plots/RTs_subjects.png", plot = p,
+         width=25, height=13, dpi=320)
+}
+```
+
+
+## Plot all items
+
+```{r rt-item-plot, fig.height=10, fig.width=15}
+if (plot_by_item_rts == TRUE) {
+
+  # Generate a summary data frame including the SE:
+  dat_plot <- summarySE(dat,
+                        measurevar="RT",
+                        groupvars=c("Region", "ExpCondition",
+                                    "Task", "ExpItemNum"),
+                        na.rm=T)
+  
+  p <- ggplot(data = dat_plot,
+         aes(x = Region,
+             y = RT,
+             color = ExpCondition,
+             linetype = Task,
+             group = interaction(ExpCondition, Task))) +
+    geom_line(linewidth = 1) +
+    geom_point(size = 2) +
+    geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
+                  width = 0.2, 
+                  linewidth = 0.5) +
+    # facet_wrap(~ExpItemNum+Task) +
+    facet_wrap(~ExpItemNum) +
+    labs(color = "Expectancy") +
+    xlab("Region") +
+    ylab("Reading Time (ms)") +
+    ggtitle("Reading Times by Item") +
+    theme_minimal() +
+    theme(
+      axis.title.x = element_text(size = 14, face = "bold"),
+      axis.title.y = element_text(size = 14, face = "bold"),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+      legend.title = element_text(size = 14),
+      legend.text = element_text(size = 12),
+      strip.text = element_text(size = 14, face = "bold"),
+      plot.background = element_rect(fill = "white", color = NA)
+    ) +
+    scale_color_manual(values = c("navy", "steelblue1"))
+  print(p)
+  
+  ggsave("./plots/RTs_items.png", plot = p,
+         width=30, height=20, dpi=320)
+}
+```
+
+
+## Individual item plots
+
+Generate and save one plot for each item, with the words annotated above the x-axis:
+
+```{r item-plots-individual}
+if (plot_inidividual_items == TRUE) {
+  dat_plot <- summarySE(dat_all,
+                        measurevar="RT",
+                        groupvars=c("Region", "ExpCondition",
+                                    "Task", "Item",
+                                    "WordPosition", "Word"),
+                        na.rm=T)
+  dat_plot$WordPosition <- as.numeric(dat_plot$WordPosition)
+  summary(dat_plot$WordPosition)
+  
+  # for (i in c(1:80, 1001:1080)) {
+  for (i in unique(as.numeric(as.character(dat_plot$Item)))) {
+    dat_plot_item <- dat_plot %>% 
+      filter(Item == i) %>% 
+      group_by(WordPosition) %>%
+      mutate(Word = if_else(
+        WordPosition == 6,
+        paste(unique(Word[WordPosition == 6]), collapse = "/"),
+        Word)) %>%
+      ungroup()
+    item_no_char <- as.character(unique(dat_plot_item$Item))
+    
+    p <- ggplot(dat_plot_item,
+                aes(x = WordPosition,
+                y = RT,
+                color = ExpCondition,
+                linetype = Task,
+                group = interaction(ExpCondition, Task))) +
+      geom_line(linewidth = 1) +
+      geom_point(size = 2) +
+      geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
+                    width = 0.2, 
+                    linewidth = 0.5) +
+      {if (as.numeric(item_no_char) < 1000)
+           annotate("rect", xmin = 5.5, xmax = 8.5, ymin = -Inf, ymax = Inf, 
+               fill = "gray", alpha = 0.3)} +
+      labs(color = "Expectancy",
+           title = paste0("Reading Times: Item ", item_no_char)) +
+      scale_x_continuous(
+        name = "Word Position",
+        breaks = dat_plot_item$WordPosition,
+        sec.axis = sec_axis(~ ., name = "Word",
+                            breaks = dat_plot_item$WordPosition,
+                            labels = dat_plot_item$Word)
+      ) +
+      ylab("Reading Time (ms)") +
+      theme_minimal() +
+      theme(
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold"),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        strip.text = element_text(size = 14, face = "bold"),
+        plot.background = element_rect(fill = "white", color = NA)
+      ) +
+      scale_color_manual(values = c("navy", "steelblue1"))
+    
+    plot_title <- paste0("./plots/item_plots/item_", as.character(i), ".png")
+    ggsave(plot_title, plot = p, width=12, height=5, dpi=320)
+  }
 }
 ```
 
@@ -944,9 +1005,16 @@ ggplot(data=dat_plot,
 ```
 
 
+```{r exit-before-models}
+if (run_models == FALSE) {
+  knitr::knit_exit()
+}
+```
+
 
 
 # Models
+
 
 ```{r}
 dat$Expectancy <- droplevels(factor(dat$ExpCondition,
@@ -990,13 +1058,13 @@ summary(lm(logRT ~ Expectancy * Task + Length_c + Freq_c,
 
 Lmer with cloze as predictor:
 
-```{r lmer-target-cloze}
-m_target <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
+```{r lmer-target-cloze, eval = FALSE}
+m_target_cloze <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
                    TrialCounterTask_c + logPreCritRT +
                    (1 + Cloze_c + Task + TrialCounterTask_c | Subject) +
                    (1 + Cloze_c + Task | Item),
                  data = filter(dat, Region == "target"))
-summary(m_target)
+summary(m_target_cloze)
 ```
 
 Lmer with binary expectancy as predictor:
@@ -1014,17 +1082,17 @@ summary(m_target)
 
 Lmer with cloze as predictor:
 
-```{r lmer-spillover1-cloze}
-m_spill1 <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
+```{r lmer-spillover1-cloze, eval = FALSE}
+m_spill1_cloze <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
                    TrialCounterTask_c +
                    logPreCritRT +
                    (1 + Cloze_c + Task + TrialCounterTask_c | Subject) +
                    (1 + Cloze_c + Task | Item),
                  data = filter(dat, Region == "spill1"))
-summary(m_spill1)
+summary(m_spill1_cloze)
 ```
 
-```{r lmer-spillover1-cloze-half}
+```{r lmer-spillover1-cloze-half, eval = FALSE}
 # A main effect of half
 lmer(logRT ~ Cloze_c + Task + Length_c + Freq_c + 
        Half +
@@ -1065,13 +1133,13 @@ summary(m_spill1)
 
 Lmer with cloze as predictor:
 
-```{r lmer-spillover2-cloze}
-m_spill2 <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
+```{r lmer-spillover2-cloze, eval = FALSE}
+m_spill2_cloze <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
                  TrialCounterTask_c + logPreCritRT +
                    (1 + Cloze_c + Task + TrialCounterTask_c | Subject) +
                    (1 + Cloze_c + Task | Item),
                  data = filter(dat, Region == "spill2"))
-summary(m_spill2)
+summary(m_spill2_cloze)
 ```
 
 Lmer with binary expectancy as predictor:
@@ -1103,12 +1171,27 @@ get_coefficients <- function(m) {
 }
 
 dat_coef <- NULL
-for (region in c("pre-critical", "target", "spill1", "spill2")) {
+# for (region in c("pre-critical", "target", "spill1", "spill2")) {
+for (region in c("target", "spill1", "spill2")) {
   dat_region <- dat %>% filter(Region == region)
-  m <- lmer(logRT ~ Expectancy * Task + Length_c + Freq_c +
-              (1 | Subject) +
-              (1 | Item),
+  
+  # m <- lmer(logRT ~ Expectancy * Task + Length_c + Freq_c +
+  #             (1 | Subject) +
+  #             (1 | Item),
+  #           data = dat_region)
+  
+  m <- lmer(logRT ~ Cloze_c * Task + Length_c + Freq_c +
+                   TrialCounterTask_c +
+                   logPreCritRT +
+                   (1 + Cloze_c + Task | Subject) +
+                   (1 | Item),
             data = dat_region)
+  
+  print("---------------------------------------------------------------------")
+  print("MODEL SUMMARY FOR REGION:")
+  print(region)
+  print(summary(m))
+            
   coef_region <- get_coefficients(m)
   coef_region$Region <- region
   
@@ -1119,10 +1202,11 @@ for (region in c("pre-critical", "target", "spill1", "spill2")) {
   }
 }
 
-dat_coef$Region <- factor(dat_coef$Region, levels = c("pre-critical","target",
-                                                      "spill1", "spill2"))
+dat_coef$Region <- factor(dat_coef$Region, levels =
+                            c("pre-critical","target",
+                              "spill1", "spill2"))
 
-ggplot(dat_coef, aes(x = Region, y = estimate,
+ggplot(filter(dat_coef, Region != "pre-critical"), aes(x = Region, y = estimate,
                      color = term)) +
   geom_errorbar(aes(ymin = estimate - std.error,
                     ymax = estimate + std.error),
@@ -1137,5 +1221,4 @@ ggplot(dat_coef, aes(x = Region, y = estimate,
        color = "Predictor") +
   theme_minimal()
 ```
-
 
