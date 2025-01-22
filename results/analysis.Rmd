@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Preliminaries
 
-Libraries: 
+Libraries:
 
 ```{r, message = FALSE}
 # Preliminaries
@@ -24,6 +24,7 @@ library(gridExtra)
 library(Rmisc)
 library(lme4)
 library(lmerTest)
+source("functions.R")
 ```
 
 Some script parameters that will determine which sections of the script will / will not be run:+
@@ -44,101 +45,6 @@ plot_inidividual_items = FALSE
 
 # Quit before running the models:
 run_models = TRUE
-```
-
-
-Custom functions:
-
-```{r define-functions}
-preprocess_data <- function(df) {
-  
-  # Annotate the region 
-  df$Region <- "other"
-  df <- df %>%
-    mutate(Region = case_when(
-      WordPosition == "5" ~ "pre-critical",
-      WordPosition == "6" ~ "target",
-      WordPosition == "7" ~ "spill1",
-      WordPosition == "8" ~ "spill2"
-    ))
-  df$Region <- factor(df$Region, levels=c("pre-critical", "target",
-                                          "spill1", "spill2"))
-  
-  # Transform variables
-  df$RT <- as.numeric(df$RT)
-  df$ExpCondition <- as.factor(df$ExpCondition)
-  
-  # Assign unique subject numbers from 1 to N
-  df <- df %>%
-    mutate(Subject = match(UniqueID, unique(UniqueID)))
-  df$Subject <- as.factor(df$Subject)
-  df$Item <- as.factor(df$ExpItemNum)
-  
-  # Add precritical RTs as new column (by Subject/Item)
-  df_precrit <- df %>%
-    dplyr::filter(Region == "pre-critical") %>%
-    dplyr::select(Item, Subject, PreCriticalRT = RT)
-  df <- df %>%
-    left_join(df_precrit, by = c("Item", "Subject"))
-  
-  # Add a binary predictor to distinguish first vs. second half
-  df$Half <- ifelse(df$Block %in% 1:2, "First Half", "Second Half")
-
-  return(df)
-}
-
-print_RTs <- function(df) {
-  df <- df %>% 
-    dplyr::filter(Region != "pre-critical" & Region != "other")
-  cat("Overall mean RT:")
-  print(round(mean(df$RT), 2))
-  cat("Mean RT by condition:")
-  df %>%
-    dplyr::group_by(ExpCondition) %>%
-    dplyr::summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
-    print() 
-  cat("Mean RT by condition & task:")
-  df %>%
-    dplyr::group_by(Task, ExpCondition) %>%
-    dplyr::summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
-    print()
-  cat("Mean RT by condition & task & region:")
-  df %>%
-    dplyr::group_by(Region, Task, ExpCondition) %>%
-    dplyr::summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
-    print()
-}
-
-remove_outliers_thresholds <- function(df, min_rt = 80, max_rt = 2500) {
-  nrow_orig <- nrow(df)
-  df <- filter(df,
-               RT > min_rt & RT < max_rt)
-  nrow_new <- nrow(df)
-  nrow_diff <- nrow_orig-nrow_new
-  cat("Number of data points eliminated:", nrow_diff, "out of", nrow_orig)
-  cat("  (", round(nrow_diff / nrow_orig * 100, 2), "%)", sep="")
-  return(df)
-}
-
-remove_outliers_subj_sd <- function(df, sd_threshold=3) {
-  nrow_orig <- nrow(df)
-  df_subj_sd <- df %>% 
-    summarySE(measurevar="RT",
-              groupvars=c("UniqueID"),
-              na.rm=T) %>% 
-    select(UniqueID, RT, sd) %>% 
-    dplyr::rename(MeanRT = RT)
-  df <- merge(df, df_subj_sd, by="UniqueID")
-  df <- df %>% 
-    filter(RT < MeanRT+sd_threshold*sd & RT > MeanRT-sd_threshold*sd)
-  df$sd <- NULL
-  df$MeanRT <- NULL
-  nrow_new <- nrow(df)
-  nrow_diff <- nrow_orig-nrow_new
-  cat("Number of data points eliminated:", nrow_diff, "out of", nrow_orig)
-  cat("  (", round(nrow_diff / nrow_orig * 100, 2), "%)", sep="")
-  return(df)
-}
 ```
 
 
@@ -220,7 +126,8 @@ completeness %>%
   unique()
 
 # Random order
-xtabs(~ RandomOrder + LatinList, completeness)  # should show 160 or 0; multiples of 160 mean some subjects ran the same order
+# should show 160 or 0; multiples of 160 mean some subjects ran the same order
+xtabs(~ RandomOrder + LatinList, completeness)
 range(xtabs(~ RandomOrder + LatinList, completeness))
 
 # Random Order by sorted by List
@@ -293,12 +200,12 @@ ggplot(data=dat_acc_subj,
   geom_bar(stat="identity",
            width=1,
            show.legend=TRUE,
-           color = "black",
+           color = "gray",
            alpha = 0.5) +
   geom_hline(yintercept = 0.7, linetype = "dashed", color = "black",
              linewidth = 0.8) +
   annotate("text",
-           x = length(unique(dat_acc_subj$UniqueID)) / 2, y = 0.72,
+           x = length(unique(dat_acc_subj$UniqueID)) / 2, y = 0.75,
            label = "70% accuracy",
            color = "black", size = 8, fontface = "bold",
            angle = 0) +
@@ -431,25 +338,6 @@ dat <- dat %>%
 Visually check for outliers:
 
 ```{r}
-rt_hist <- function(dat, plot_subtitle) {
-  ggplot(data=dat,
-        aes(RT, fill=UniqueID)) + 
-  geom_histogram(alpha = 0.5,
-                 show.legend=TRUE) + 
-  labs(title = "RTs by Subject",
-       subtitle = plot_subtitle,
-       fill = "Subject") +
-  theme_minimal() +
-  theme(
-    axis.title.x = element_text(size = 14, face = 'bold'),
-    axis.title.y = element_text(size = 14, face = 'bold'),
-    axis.text.x = element_text(size = 12, face = 'bold'),
-    axis.text.y = element_text(size = 12),
-    plot.title = element_text(size = 25, face = 'bold', hjust = 0.5),
-    plot.subtitle = element_text(size = 16, face = "italic", hjust = 0.5),
-    strip.text = element_text(size = 18, face = "bold")
-  ) 
-}
 rt_hist(dat, plot_subtitle = "All critical regions, before outlier elimination")
 ```
 

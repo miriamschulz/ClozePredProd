@@ -35,59 +35,14 @@ Define a function to read in the raw `csv` results file as downloaded from PC Ib
 # Preliminaries
 rm(list = ls())
 library(tidyverse)
-
-read.pcibex <- function(filepath, auto.colnames=TRUE, fun.col=function(col,cols){cols[cols==col]<-paste(col,"Ibex",sep=".");return(cols)}) {
-  n.cols <- max(count.fields(filepath,sep=",",quote=NULL),na.rm=TRUE)
-  if (auto.colnames){
-    cols <- c()
-    con <- file(filepath, "r")
-    while ( TRUE ) {
-      line <- readLines(con, n = 1, warn=FALSE)
-      if ( length(line) == 0) {
-        break
-      }
-      m <- regmatches(line,regexec("^# (\\d+)\\. (.+)\\.$",line))[[1]]
-      if (length(m) == 3) {
-        index <- as.numeric(m[2])
-        value <- m[3]
-        if (is.function(fun.col)){
-          cols <- fun.col(value,cols)
-        }
-        cols[index] <- value
-        if (index == n.cols){
-          break
-        }
-      }
-    }
-    close(con)
-    return(read.csv(filepath, comment.char="#", header=FALSE, col.names=cols))
-  }
-  else{
-    return(read.csv(filepath, comment.char="#", header=FALSE, col.names=seq(1:n.cols)))
-  }
-}
-
-convert_to_hours <- function(minutes) {
-  #if (is.na(minutes)) {return(NA)}
-  minutes <- round(minutes)
-  hours <- minutes %/% 60 %/% 60
-  remaining_minutes <- (minutes %/% 60) - hours*60
-  seconds <- minutes %% 60
-  formatted_time <- sprintf("%dh%02dm%02d", hours, remaining_minutes, seconds)
-  return(formatted_time)
-}
+source("functions.R")
 ```
 
 Read data frame:
 
 ```{r}
-# df <- read.pcibex('results_dev.csv')
 df <- read.pcibex('results.csv')
-#check <- df %>% filter(UniqueID=="NULL")
 df <- unique(df)
-
-# df <- df[!df$UniqueID %in% c('4lchm0'), ]  # remove subject(s)
-#summary(as.factor(df$UniqueID))
 # df %>% filter(Parameter == "Age") %>% select(Value)  # check that no 999 (me)
 ```
 
@@ -124,6 +79,7 @@ range(df.demogs$Age)
 # Gender
 summary(df.demogs$Gender)
 ```
+
 
 ## Prolific completion times
 
@@ -185,7 +141,6 @@ summary(df.survey$Task_difficulty)
 
 write.csv(df.survey, "postexp_survey.csv", row.names=FALSE)
 ```
-
 
 
 # Extract comprehension and production data
