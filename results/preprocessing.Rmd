@@ -31,16 +31,18 @@ What this script does:
 
 Define a function to read in the raw `csv` results file as downloaded from PC Ibex:
 
-```{r, message = FALSE}
+```{r preliminaries, message = FALSE}
 # Preliminaries
 rm(list = ls())
 library(tidyverse)
 source("functions.R")
+exclude_participants = TRUE
+generate_main_plots = TRUE
 ```
 
 Read data frame:
 
-```{r}
+```{r read-data}
 df <- read.pcibex('results.csv')
 df <- unique(df)
 # df %>% filter(Parameter == "Age") %>% select(Value)  # check that no 999 (me)
@@ -51,7 +53,7 @@ df <- unique(df)
 
 ## General demographics
 
-```{r}
+```{r demopgrahics}
 df.demogs <- df %>%
   filter(PennElementName == 'demographics' | Parameter == "prolific_id") %>% 
   select(UniqueID, Parameter, Value)
@@ -83,7 +85,7 @@ summary(df.demogs$Gender)
 
 ## Prolific completion times
 
-```{r}
+```{r completion-time}
 # Add the prolific IDs
 demogs.prolific <- read.csv("demographics_prolific.csv", header=TRUE)
 demogs.prolific <- demogs.prolific %>%
@@ -117,14 +119,14 @@ df.demogs %>%
          mean_time_hours = convert_to_hours(round(mean_time)))
 ```
 
-```{r}
+```{r export-demographics}
 write.csv(df.demogs, "demographics.csv", row.names=FALSE)
 ```
 
 
 # Post-experimental survey
 
-```{r}
+```{r post-experimental-survey}
 df.survey <- df %>%
   filter(PennElementName == 'postexp_survey') %>% 
   select(UniqueID, Parameter, Value)
@@ -147,7 +149,7 @@ write.csv(df.survey, "postexp_survey.csv", row.names=FALSE)
 
 Split into a production and a comprehension data set:
 
-```{r}
+```{r split-into-prod-comp-data}
 df$Value <- gsub('%2C', ',', df$Value)   # commas instead of %2C
 df$Comments <- gsub('%2C', ',', df$Comments)   # commas instead of %2C
 
@@ -180,7 +182,7 @@ colnames(prod) <- new_colnames
 
 ## Comprehension accuracy
 
-```{r}
+```{r comprehension-accuracy-check}
 # Extract all logged key presses
 df.key <- df %>% filter(PennElementName == 'ComprehensionKey')
 df.key$TrialAccuracy <- ifelse(df.key$CorrectAnswer == "true", 1, 0)
@@ -213,7 +215,7 @@ mean(df.acc.subj$Accuracy)
 
 ## RTs (superficial first check)
 
-```{r}
+```{r rts-first-check}
 comp.targets <- filter(comp, WordPosition == TargetPosition)
 comp.targets$RT <- as.numeric(comp.targets$RT)
 prod.targets <- filter(prod, WordPosition == TargetPosition)
@@ -236,7 +238,7 @@ prod.targets %>%
 
 # Export
 
-```{r}
+```{r combine-and-export}
 # Combine
 all <- rbind(comp, prod)
 all$Sentence <- gsub('%2C', ',', all$Sentence)   # commas instead of %2C
@@ -258,9 +260,8 @@ new_colnames <- c("EventTime", "UniqueID",
                   "ProductionTimeout",
                   "RecordingFilename",
                   "Sentence", "SentenceEnd")
-all.export <- all[, new_colnames]
+all <- all[, new_colnames]
 
 # Export
-write.csv(all.export, "results_preprocessed.csv", row.names=FALSE)
+write.csv(all, "results_preprocessed.csv", row.names=FALSE)
 ```
-

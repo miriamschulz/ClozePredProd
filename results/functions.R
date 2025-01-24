@@ -157,6 +157,7 @@ rt_hist <- function(dat, plot_subtitle) {
   ggplot(data=dat,
          aes(RT, fill=UniqueID)) + 
     geom_histogram(alpha = 0.5,
+                   binwidth = 50,
                    show.legend=TRUE) + 
     labs(title = "RTs by Subject",
          subtitle = plot_subtitle,
