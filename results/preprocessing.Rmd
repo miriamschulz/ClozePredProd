@@ -20,66 +20,80 @@ This script preprocesses the raw PC Ibex results of the Cloze prediction & produ
 
 What this script does:
 
-- split the data into a production and a comprehension data set
 - summary of demographics
 - summary of post-experimental survey
-- check by-participant and overall accuracy
-- export preprocessed data as `results_preprocessed.csv`
+- preprocess the reading times (filter columns, assign correct column names, etc.)
+- remove participants that must be excluded (due to failure to understand the task or not being native English speakers)
+- check the remaining data for completeness, accuracy on the comprehension questions, number of timeouts per participant during the production task, and mean question answer time per condition
+- remove outliers:
+  - by a hard threshold
+  - with a by-subject standard deviation approach
+  - optional: removing subjects with very fast RTs in at least one task
+  - optional: removing subjects with invariant RTs between tasks / with invariant or higher RTs in comprehension
+- generate a bar plot of the remaining RTs by region
+- export the remaining data as two R data sets (one with all regions and one with only the target regions)
 
 
-# Read PCIbex results
+# Preliminaries
 
-Define a function to read in the raw `csv` results file as downloaded from PC Ibex:
+Libraries & co:
 
 ```{r preliminaries, message = FALSE}
-# Preliminaries
 rm(list = ls())
 library(tidyverse)
+library(ggplot2)
+library(Rmisc)
 source("functions.R")
+```
+
+## Set flags
+
+```{r flags}
 exclude_participants = TRUE
+exclude_fast_participants = FALSE
+exclude_invariant_participants = FALSE
 generate_main_plots = TRUE
 ```
 
-Read data frame:
+## Read data
 
 ```{r read-data}
-df <- read.pcibex('results.csv')
-df <- unique(df)
-# df %>% filter(Parameter == "Age") %>% select(Value)  # check that no 999 (me)
+dat <- read.pcibex('results.csv')
+dat <- unique(dat)
 ```
 
 
-# Demographics
+# Demographics (all participants)
 
 ## General demographics
 
 ```{r demopgrahics}
-df.demogs <- df %>%
+dat.demogs <- dat %>%
   filter(PennElementName == 'demographics' | Parameter == "prolific_id") %>% 
   select(UniqueID, Parameter, Value)
 
 # Fix whitespace characters
-df.demogs$Value <- gsub('%2C', ',', df.demogs$Value)   # commas instead of %2C
-df.demogs$Value <- gsub('%0A', ' ', df.demogs$Value)   # spaces instead of %0A
+dat.demogs$Value <- gsub('%2C', ',', dat.demogs$Value)   # commas instead of %2C
+dat.demogs$Value <- gsub('%0A', ' ', dat.demogs$Value)   # spaces instead of %0A
 
 # Transform to wide format
-df.demogs <- df.demogs %>%
+dat.demogs <- dat.demogs %>%
   pivot_wider(names_from = Parameter, values_from = Value)
 
 # Make all variables factors and then age numeric
-df.demogs[] <- lapply(df.demogs, tolower)
-df.demogs[-3] <- lapply(df.demogs[-3], as.factor)  # all columns except Age
-df.demogs$Age <- as.numeric(df.demogs$Age)
+dat.demogs[] <- lapply(dat.demogs, tolower)
+dat.demogs[-3] <- lapply(dat.demogs[-3], as.factor)  # all columns except Age
+dat.demogs$Age <- as.numeric(dat.demogs$Age)
 
 # Native languages
-summary(df.demogs$Native_language)
+summary(dat.demogs$Native_language)
 
 # Age
-mean(df.demogs$Age)
-range(df.demogs$Age)
+mean(dat.demogs$Age)
+range(dat.demogs$Age)
 
 # Gender
-summary(df.demogs$Gender)
+summary(dat.demogs$Gender)
 ```
 
 
@@ -95,15 +109,15 @@ demogs.prolific <- demogs.prolific %>%
   dplyr::filter(Status != "RETURNED") %>% 
   dplyr::select(prolific_id, Birthplace_prolific, Time_taken)
 
-df.demogs <- merge(df.demogs, demogs.prolific, by="prolific_id", all.x=TRUE)
-df.demogs$Time_taken_h <- convert_to_hours(df.demogs$Time_taken)
+dat.demogs <- merge(dat.demogs, demogs.prolific, by="prolific_id", all.x=TRUE)
+dat.demogs$Time_taken_h <- convert_to_hours(dat.demogs$Time_taken)
 
 # Calculate how the non-natives influenced the median of time taken
-convert_to_hours(median(df.demogs$Time_taken))
+convert_to_hours(median(dat.demogs$Time_taken))
 non_natives <- c("vuqqnd", "ee49u2", "vznkz3", "3jw4ew", "ps4dv4")
 
 # Median completion time of the non-natives:
-df.demogs %>%
+dat.demogs %>%
   filter(UniqueID %in% non_natives) %>% 
   summarise(median_time = median(Time_taken, na.rm = TRUE),
             mean_time = mean(Time_taken, na.rm = TRUE)) %>%
@@ -111,7 +125,7 @@ df.demogs %>%
          mean_time_hours = convert_to_hours(mean_time))
 
 # Median completion time of the natives:
-df.demogs %>%
+dat.demogs %>%
   filter(!UniqueID %in% non_natives) %>% 
   summarise(median_time = median(Time_taken, na.rm = TRUE),
             mean_time = mean(Time_taken, na.rm = TRUE)) %>%
@@ -120,39 +134,43 @@ df.demogs %>%
 ```
 
 ```{r export-demographics}
-write.csv(df.demogs, "demographics.csv", row.names=FALSE)
+write.csv(dat.demogs, "demographics.csv", row.names=FALSE)
 ```
 
 
 # Post-experimental survey
 
 ```{r post-experimental-survey}
-df.survey <- df %>%
+dat.survey <- dat %>%
   filter(PennElementName == 'postexp_survey') %>% 
   select(UniqueID, Parameter, Value)
-df.survey$Value <- gsub('%2C', ',', df.survey$Value)   # commas instead of %2C
-df.survey$Value <- gsub('%0A', ' ', df.survey$Value)   # spaces instead of %0A
+dat.survey$Value <- gsub('%2C', ',', dat.survey$Value)   # commas instead of %2C
+dat.survey$Value <- gsub('%0A', ' ', dat.survey$Value)   # spaces instead of %0A
 
 # Transform to wide format
-df.survey <- df.survey %>%
+dat.survey <- dat.survey %>%
   pivot_wider(names_from = Parameter, values_from = Value)
 
-df.survey[] <- lapply(df.survey, as.factor)
-summary(df.survey$Experiment_length)
-summary(df.survey$Task_difficulty)
+dat.survey[] <- lapply(dat.survey, as.factor)
+summary(dat.survey$Experiment_length)
+summary(dat.survey$Task_difficulty)
 
-write.csv(df.survey, "postexp_survey.csv", row.names=FALSE)
+write.csv(dat.survey, "postexp_survey.csv", row.names=FALSE)
 ```
 
 
-# Extract comprehension and production data
+# Preprocess RT data frame
 
-Split into a production and a comprehension data set:
+```{r preprocess-rt-data}
+# Fix comma character
+dat$Value <- gsub('%2C', ',', dat$Value)   # commas instead of %2C
+dat$Comments <- gsub('%2C', ',', dat$Comments)   # commas instead of %2C
 
-```{r split-into-prod-comp-data}
-df$Value <- gsub('%2C', ',', df$Value)   # commas instead of %2C
-df$Comments <- gsub('%2C', ',', df$Comments)   # commas instead of %2C
+# Keep only task data
+dat <- dat %>% 
+  filter(Task %in% c("Comprehension", "Production"))
 
+# Rename columns
 new_colnames <- c("WordPosition", "Word", "EventTime", "UniqueID",
                   "RandomOrder", "LatinList", "LatinListBinary",
                   "TaskOrder", "BlocksReversed",
@@ -167,83 +185,13 @@ new_colnames <- c("WordPosition", "Word", "EventTime", "UniqueID",
                   "TargetAnswer", "QuestionText", "CorrectAnswer",
                   "RunningAccuracy", "ProductionTimeout", "RecordingFilename",
                   "RT", "Sentence")
+dat$Newline. <- NULL
+dat <- select(dat, 10:42)
+colnames(dat) <- new_colnames
 
-comp <- filter(df, Task == "Comprehension")
-comp$Newline. <- NULL
-comp <- select(comp, 10:42)
-colnames(comp) <- new_colnames
+dat$Sentence <- gsub('%2C', ',', dat$Sentence)   # commas instead of %2C
 
-prod <- filter(df, Task == "Production")
-prod$Newline. <- NULL
-prod <- select(prod, 10:42)
-colnames(prod) <- new_colnames
-```
-
-
-## Comprehension accuracy
-
-```{r comprehension-accuracy-check}
-# Extract all logged key presses
-df.key <- df %>% filter(PennElementName == 'ComprehensionKey')
-df.key$TrialAccuracy <- ifelse(df.key$CorrectAnswer == "true", 1, 0)
-
-df.key.prac <- df.key %>% filter(Task == 'ExpPractice')
-df.key.trials <- df.key %>% filter(Task == 'Comprehension')
-
-# Completeness checks
-table(xtabs(~ UniqueID, df.key)) # comprehension trials + comprehension practice
-table(xtabs(~ UniqueID, df.key.trials))  # should equal N of comp trials with Q
-
-# Acc for all trials
-df.acc.subj <- df.key %>%
-  group_by(UniqueID) %>%
-  summarize(Accuracy = mean(TrialAccuracy))
-df.acc.subj
-round(range(df.acc.subj$Accuracy), 2)
-mean(df.acc.subj$Accuracy)
-
-# Acc only critical trials
-df.acc.subj <- df.key.trials %>%
-  group_by(UniqueID) %>%
-  summarize(Accuracy = mean(TrialAccuracy))
-df.acc.subj
-
-round(range(df.acc.subj$Accuracy), 2)
-mean(df.acc.subj$Accuracy)
-```
-
-
-## RTs (superficial first check)
-
-```{r rts-first-check}
-comp.targets <- filter(comp, WordPosition == TargetPosition)
-comp.targets$RT <- as.numeric(comp.targets$RT)
-prod.targets <- filter(prod, WordPosition == TargetPosition)
-prod.targets$RT <- as.numeric(prod.targets$RT)
-
-mean(comp.targets$RT)
-mean(prod.targets$RT)
-
-comp.targets %>%
-  dplyr::group_by(ExpCondition) %>%
-  dplyr::summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
-  print()
-
-prod.targets %>%
-  dplyr::group_by(ExpCondition) %>%
-  dplyr::summarise(mean_RT = mean(RT, na.rm = TRUE)) %>%
-  print()
-```
-
-
-# Export
-
-```{r combine-and-export}
-# Combine
-all <- rbind(comp, prod)
-all$Sentence <- gsub('%2C', ',', all$Sentence)   # commas instead of %2C
-
-# Reorder
+# Reorder columns
 new_colnames <- c("EventTime", "UniqueID",
                   "RandomOrder", "LatinList", "LatinListBinary",
                   "TrialCounterGlobal", "TrialCounterTask",
@@ -260,8 +208,433 @@ new_colnames <- c("EventTime", "UniqueID",
                   "ProductionTimeout",
                   "RecordingFilename",
                   "Sentence", "SentenceEnd")
-all <- all[, new_colnames]
+dat <- dat[, new_colnames]
 
 # Export
-write.csv(all, "results_preprocessed.csv", row.names=FALSE)
+# write.csv(dat, "results_preprocessed.csv", row.names=FALSE)
 ```
+
+Annotate the critical regions etc:
+
+```{r preprocess-data}
+dat <- preprocess_data(dat)
+```
+
+
+# Remove participants
+
+Exclude subjects who were not native speakers of English or failed the tasks:
+
+```{r exclude-participants}
+if (exclude_participants == TRUE) {
+  dat <- dat %>%
+    # nonnatives Prolific Exp 1
+    filter(!UniqueID %in% c(# FIRST PROLIFIC EXPERIMENT:
+                            "vuqqnd",  # non-native, super slow RTs
+                            "ee49u2",  # non-native
+                            "vznkz3",  # non-native?, some double submissions (tecnnical problems)
+                            "3jw4ew",  # non-native
+                            "ps4dv4",  # non-native, did not understand the task
+                            # SECOND PROLIFIC EXPERIMENT:
+                            "2jcruh",  # non-native and makes a funny voice on many trials
+                            "e2zqww",  # read contexts aloud                                       ----CHECK
+                            "0jxphp",  # empty recordings, ~50% acc, super fast RTs [RETURNED]
+                            "m7ugwz",  # read contexts aloud (but faster than in comprehension)
+                            "jocpf0",  # non-native and timed out (restarted)
+                            "pizxpx",  # empty recordings
+                            "hpttkp",  # nonsense and repeating answers [RETURNED]
+                            "icak56",  # non-native??                                              ----CHECK
+                            "8v42p8",  # non-native?, very slow on production RTs (~1000ms)
+                            "bdhmxy",  # non-native?, very slow RTs in both tasks                   ----CHECK
+                            "glbu6a",  # non-native, repeated last context words, wrong browser [RETURNED]
+                            "6wqbuo",  # non-native
+                            "-u775t",  # technical problems: restarted 3x; loud background talking
+                            "ev0tqj",  # read contexts aloud in one prod block                       ----CHECK
+                            "4ftnhn",  # no server data; born in Ghana; completion time too long
+                            "teg94q")  # non-native, comp accuracy ~50%, too many timeouts
+    )
+}
+```
+
+
+## TODO: new demopgrahics of keep subjects
+
+
+# Checks
+
+## Data completeness check
+
+```{r completeness-checks}
+# Subset the data frame for checks
+completeness <- dat %>%
+  select(UniqueID, Item, ExpCondition, Task, Block, RandomOrder, LatinList) %>%
+  unique()
+
+# All items: How often was each item presented? 
+range(xtabs(~ Item, completeness))  # should show N participants
+
+# Items by subject: did every subject see every item?
+range(xtabs(~ UniqueID + Item, completeness))  # should range from 1 to 1
+
+# Experimental conditions per subject (should be 40 for each condition)
+xtabs(~ UniqueID + ExpCondition, droplevels(filter(dat, Region == "target" &
+                                            ExpCondition %in% c("High", "Low"))))
+
+# Task by subject
+xtabs(~ UniqueID + Task, completeness)  # should show 80 for each task
+
+# Block by subject
+xtabs(~ UniqueID + Block, completeness)  # should show 40 for each block
+
+# List by subject
+# xtabs(~ UniqueID + LatinList, completeness)  # must show 160 or 0 everywhere
+completeness %>%
+  select(LatinList, UniqueID) %>%
+  arrange(LatinList) %>% 
+  unique()
+
+# Random order
+# should show 1 or 0; values > 1 mean some subjects ran the same order
+xtabs(~ RandomOrder + LatinList, completeness) / 160
+range(xtabs(~ RandomOrder + LatinList, completeness) / 160)
+
+# Random order sorted by subject
+completeness %>%
+  select(UniqueID, RandomOrder) %>%
+  arrange(UniqueID) %>% 
+  unique()
+
+# Random Order by sorted by List
+completeness %>% 
+  select(LatinList, RandomOrder, UniqueID) %>% 
+  unique() %>% 
+  arrange(LatinList, RandomOrder)
+
+# Random order by subject+list (useful to get the latest RandomOrder used, i.e. counter state):
+completeness %>% 
+  select(LatinList, RandomOrder, UniqueID) %>% 
+  unique()
+
+# Item by list
+range(xtabs(~ Item + LatinList, completeness)) # N subjects per list: min to max
+
+# Subjects per list
+n_trials <- 160
+xtabs(~ LatinList, completeness) / n_trials
+```
+
+
+## Comprehension question accuracy
+
+```{r question-accuracy}
+dat_acc <- dat %>%
+  filter(!is.na(CorrectAnswer)) %>%
+  select(CorrectAnswer, UniqueID, LatinList, Item) %>% 
+  unique()
+  #filter(Region == "target")
+dat_acc$TrialAccuracy <- ifelse(dat_acc$CorrectAnswer == "true", 1, 0)
+
+# Completeness checks
+table(xtabs(~ UniqueID, dat_acc)) # should equal N of comp trials with Q in the list & N subjects
+
+# Acc for all trials
+dat_acc_subj <- dat_acc %>%
+  dplyr::group_by(UniqueID, LatinList) %>%
+  dplyr::summarize(Accuracy = mean(TrialAccuracy))
+# dat_acc_subj
+round(range(dat_acc_subj$Accuracy), 2)
+round(mean(dat_acc_subj$Accuracy), 2)
+```
+
+As a sanity check: The calculated accuracy should equal the accuracy as calculated live during the experiment up to the last comprehension trial.
+
+```{r}
+dat %>%
+  filter(Task == "Comprehension") %>% 
+  filter(TrialCounterTask == max(TrialCounterTask)) %>% 
+  select(UniqueID, RunningAccuracy) %>% 
+  unique() %>% 
+  mutate(RunningAccuracy = round(RunningAccuracy, 3)) %>%
+  arrange(UniqueID)
+```
+
+Plot the accuracy for fast visual inspection:
+
+```{r accuracy-subjects-plot, eval = generate_main_plots, fig.height=7, fig.width=10}
+dat_acc_subj$UniqueID <- factor(dat_acc_subj$UniqueID, 
+                                levels = dat_acc_subj$UniqueID[order(dat_acc_subj$Accuracy,
+                                                                     dat_acc_subj$LatinList,
+                                                                     decreasing = TRUE)])
+
+ggplot(data=dat_acc_subj,
+       aes(UniqueID, Accuracy, fill=as.factor(LatinList))) + 
+  geom_bar(stat="identity",
+           width=1,
+           show.legend=TRUE,
+           color = "gray",
+           alpha = 0.5) +
+  geom_hline(yintercept = 0.7, linetype = "dashed", color = "black",
+             linewidth = 0.8) +
+  annotate("text",
+           x = length(unique(dat_acc_subj$UniqueID)) / 2, y = 0.75,
+           label = "70% accuracy",
+           color = "black", size = 8, fontface = "bold",
+           angle = 0) +
+  labs(title = "Mean accuracy by subject", 
+       subtitle = "All experimental trials, practice excluded", 
+       x = "Subject", 
+       y = "Mean accuracy",
+       fill = "List") +
+  scale_fill_manual(values=c("plum4", "steelblue4", "gray40", "darkred",
+                             "plum2", "lightsteelblue", "gray70",
+                             "lightcoral")) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = 'bold'),
+    axis.title.y = element_text(size = 14, face = 'bold'),
+    axis.text.x = element_text(size = 12, face = 'bold', angle = 90,
+                               vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 25, face = 'bold', hjust = 0.5),
+    plot.subtitle = element_text(size = 16, face = "italic", hjust = 0.5)
+  )
+```
+
+
+## Production timeouts
+
+Plot the number of production timeouts by participant:
+
+```{r timeout-subjects-plot, eval = generate_main_plots, fig.height=5, fig.width=15}
+dat_Timeouts <- dat %>% 
+  filter(Task == "Production") %>% 
+  select(c("UniqueID", "ExpCondition", "ProductionTimeout",
+           "ExpItemNum", "AnswerTime")) %>% 
+  unique()
+dat_Timeouts$ProductionTimeoutBinary <-
+  ifelse(dat_Timeouts$ProductionTimeout == "TimedOut", 1, 0)
+
+ggplot(data=dat_Timeouts,
+       aes(UniqueID, ProductionTimeoutBinary, fill=UniqueID)) + 
+  geom_bar(stat="identity",
+           width=1,
+           show.legend=FALSE) +
+  xlab("Subject") +
+  ylab("N Production Timeouts") +
+  ggtitle("Production Timeouts by Subject") +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = 'bold'),
+    axis.title.y = element_text(size = 14, face = 'bold'),
+    axis.text.x = element_text(size = 12, face = 'bold', angle = 90,
+                               vjust = 0.5, hjust = 1, margin = margin(t = 5)),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 25, face = 'bold', hjust = 0.5),
+    plot.subtitle = element_text(size = 18, face = "italic", hjust = 0.5)
+  )
+```
+
+
+## Question answer time
+
+Comprehension question Answer Time:
+
+```{r question-answertime-plots, eval = generate_main_plots}
+dat_AnswerRTs <- dat %>%
+  filter(QuestionText != "")
+
+# Plot question answer times by subject
+ggplot(data=dat_AnswerRTs,
+        aes(AnswerTime, fill=UniqueID)) + 
+  geom_histogram(alpha = 0.5,
+                 show.legend=TRUE) + 
+  labs(title = "Question RTs by Subject", 
+       subtitle = "All conditions (including fillers)", 
+       fill = "Subject") +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = 'bold'),
+    axis.title.y = element_text(size = 14, face = 'bold'),
+    axis.text.x = element_text(size = 12, face = 'bold'),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 25, face = 'bold', hjust = 0.5),
+    plot.subtitle = element_text(size = 16, face = "italic", hjust = 0.5),
+    strip.text = element_text(size = 18, face = "bold")
+  ) 
+
+# Filter out Answer Times shorter than 200ms and longer than 10s (arbitrary):
+dat_AnswerRTs <- dat_AnswerRTs %>%
+  filter(AnswerTime > 200 & AnswerTime < 10000)
+
+range(dat_AnswerRTs$AnswerTime)
+mean(dat_AnswerRTs$AnswerTime)
+sd(dat_AnswerRTs$AnswerTime)
+
+# Plot question answer times by condition
+ggplot(data=filter(dat_AnswerRTs, ExpCondition %in% c("High", "Low")),
+        aes(AnswerTime, fill=ExpCondition)) + 
+  geom_density(alpha = 0.7,
+                 show.legend=TRUE) + 
+  labs(title = "Question RTs by Condition", 
+       subtitle = "Experimental conditions only; RTs filtered > 200ms & < 10s", 
+       fill = "Subject") +
+  scale_fill_manual(values=c("navy", "steelblue1")) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = 'bold'),
+    axis.title.y = element_text(size = 14, face = 'bold'),
+    axis.text.x = element_text(size = 12, face = 'bold'),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 25, face = 'bold', hjust = 0.5),
+    plot.subtitle = element_text(size = 16, face = "italic", hjust = 0.5),
+    strip.text = element_text(size = 18, face = "bold")
+  ) 
+```
+
+
+# Outlier elimination
+
+To continue, keep only the precritical regions and regions of interest, and split the data into all and experimental items only:
+
+```{r filter-regions-fillers}
+dat_all <- dat %>% 
+  filter(!is.na(RT)) %>% 
+  filter(Word != "")
+dat <- dat %>% 
+  filter(Region != "other")
+dat <- dat %>%
+  filter(dat$ExpItemType == "ExpItem")
+```
+
+Visually check for outliers:
+
+```{r plot-rts-before-outlier-elimination, eval = generate_main_plots}
+rt_hist(dat, plot_subtitle = "All critical regions, before outlier elimination")
+```
+
+## Remove super fast subjects (optional)
+
+First, optionally exclude subjects whose mean RT was < 200ms (or some other threshold) in at least one of the two tasks:
+
+```{r remove-fast-subjects}
+if (exclude_fast_participants == TRUE) {
+  dat <- remove_fast_subjects(dat, threshold = 200)
+  dat_all <- remove_fast_subjects(dat_all, threshold = 200)
+}
+```
+
+## Threshold based outlier elimination
+
+Remove trials with extreme RTs:
+
+```{r remove-outliers-threshold}
+dat <- remove_outliers_thresholds(dat, min_rt = 100, max_rt = 2500)
+dat_all <- remove_outliers_thresholds(dat_all, min_rt = 100, max_rt = 2500)
+```
+
+## SD by subject based outlier elimination
+
+Additional outlier elimination by SD by participant:
+
+```{r remove-outliers-sd}
+dat <- remove_outliers_subj_sd(dat, sd_threshold=2.5)
+dat_all <- remove_outliers_subj_sd(dat_all, sd_threshold=2.5)
+```
+
+Check region times after outlier elimination:
+
+```{r print-rts-after-outlier-elimination}
+print_RTs(dat)
+```
+
+```{r plot-rts-after-outlier-elimination, eval = generate_main_plots}
+rt_hist(dat, plot_subtitle = "All critical regions, after outlier elimination")
+```
+
+
+## Remove invariant participants (optional)
+
+Get participants who were invariant between the production / comprehension task (i.e., for which the difference between production wrt. comprehension is <= 0, or <= 10 on average):
+
+```{r remove-invariant-subjects}
+if (exclude_invariant_participants == TRUE) {
+  dat <- remove_invavriant_subjects(dat)
+  dat_all <- remove_invavriant_subjects(dat_all)
+}
+```
+
+
+
+# Bar plot of RTs
+
+```{r rt-bar-plot, eval = generate_main_plots, fig.height=5, fig.width=12}
+# Generate a summary data frame including the SE:
+dat_plot <- summarySE(filter(dat, !(Region %in% c("other"))),
+                      measurevar="RT",
+                      groupvars=c("ExpCondition", "Task", "Region"),
+                      na.rm=T)
+
+# Determine maximal value for y-axis:
+max_y <- max(c(dat_plot$RT + dat_plot$se))
+dat_plot$Region <- as.factor(dat_plot$Region)
+
+# Plot:
+ggplot(data=dat_plot,
+       # aes(ExpCondition, RT, fill=ExpCondition)) +
+       aes(ExpCondition, RT, fill = interaction(Task, ExpCondition))) + 
+  geom_bar(#aes(fill=ExpCondition,
+               # alpha = Task == "Production"
+               # ),
+           stat="identity",
+           width=1,
+           show.legend=TRUE) +
+  geom_errorbar(aes(ymin = RT-se, ymax = RT+se),
+              width=0.1, linewidth=0.3) +
+  facet_wrap(~Region+Task, nrow = 1) +
+  xlab("Condition") +
+  ylab("Reading Time (ms)") +
+  ggtitle("RTs by Task and Region") +
+  # scale_fill_manual(name = "Condition",
+  #                   values=c("navy", "steelblue1")) +
+  scale_fill_manual(
+    name = "Task and Condition", # Legend title
+    values = c("Comprehension.High" = "navy", 
+               "Comprehension.Low" = "lightsteelblue1",
+               "Production.High" = "seagreen4",
+               "Production.Low" = "#d5f5df"),
+    labels = c("Comprehension: High", "Production: High",
+               "Comprehension: Low", "Production: Low")
+  ) +
+  ylim(0, max_y) +
+  theme_minimal() + 
+  theme(
+      axis.title.x = element_text(size = 14, face = 'bold'),
+      axis.title.y = element_text(size = 14, face = 'bold'),
+      axis.text.x = element_text(size = 12, face = 'bold'),
+      axis.text.y = element_text(size = 12),
+      plot.title = element_text(size = 25, face = 'bold', hjust = 0.5),
+      #legend.position = "none",
+      strip.text = element_text(size = 18, face = "bold"),
+      plot.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave("./plots/RTs_barplot.png", plot = last_plot(),
+       width=18, height=6, dpi=320)
+```
+
+Numeric check of RTs:
+
+```{r check-rts}
+print_RTs(dat)
+```
+
+
+# Export
+
+```{r export-r-datasets}
+# write.csv(dat, "results_preprocessed_filtered_targetregions.csv", row.names=FALSE)
+# write.csv(dat_all, "results_preprocessed_filtered_all.csv", row.names=FALSE)
+save(dat, file = "results_preprocessed_targetregions.RData")
+save(dat_all, file = "results_preprocessed_allregions.RData")
+```
+
