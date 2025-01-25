@@ -12,8 +12,7 @@ This script loops over all audio files in a given directory
 and outputs the transcripts as a single .csv file for each subject.
 
 Subjects are extracted from the file names, which need to be of the format:
-recorder_UniqueID_ItemNum_Condition_[...].wav or
-recorder_UniqueID_ItemNum_Condition_[...].mp3
+recorder_UniqueID_ItemNum_Condition.webm (or .wav or .mp3)
 
 USAGE:
 python whisper_transcriber.py <whisper_model> <in_dir> <out_dir> <fileformat>
@@ -27,14 +26,21 @@ production_data/whisper_transcriptions webm
 
 
 import sys
+import os
 import glob
 import whisper
 
 
-# Check if directory argument is provided
+# Define font colors to print to terminal
+blue_font = "\033[1;34m"
+green_font = "\033[1;32m"
+red_font = "\033[1;31m"
+reset_color = "\033[0m"
+
+# Check if all necessary arguments are provided
 if len(sys.argv) != 5:
-    print(f"Usage: {sys.argv[0]} model input_dir output_dir file_format")
-    print(f"Example: {sys.argv[0]} medium ./recordings/ ./annotations/ webm")
+    print(f"\nUSAGE:   {sys.argv[0]} model input_dir output_dir file_format")
+    print(f"EXAMPLE: {sys.argv[0]} medium ./recordings/ ./annotations/ webm\n")
     sys.exit(1)
 
 model_size = sys.argv[1]
@@ -42,11 +48,20 @@ path = sys.argv[2]
 path_out = sys.argv[3]
 file_format = sys.argv[4]
 
-# Define font colors to print to terminal
-blue_font = "\033[1;34m"
-green_font = "\033[1;32m"
-red_font = "\033[1;31m"
-reset_color = "\033[0m"
+# Check if the input directory exists
+if not os.path.exists(path):
+    print(f"{red_font}Input directory '{path}' not found.",
+          f"Please specify an exising input directory path.{reset_color}")
+    sys.exit(1)
+
+# Check if the output directory exists; if not, create it or throw error
+if not os.path.exists(path_out):
+    # os.makedirs(path_out)
+    # print(f"{green_font}Output directory '{path_out}' not found.",
+    #       f"Output directory {path_out} created.{reset_color}")
+    print(f"{red_font}Output directory '{path_out}' not found.",
+          f"Please specify an exising output directory path.{reset_color}")
+    sys.exit(1)
 
 print(f"\nLoading Whisper model: \"{model_size}\"...\n")
 #model = whisper.load_model("medium")
