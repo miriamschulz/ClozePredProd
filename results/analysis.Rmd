@@ -606,7 +606,7 @@ contrasts(dat$BlocksReversed) <- c(-0.5, 0.5)
 colnames(attr(dat$BlocksReversed, "contrasts")) <- c("True")  # rename factor level
 
 dat$logRT <- log(dat$RT)
-dat$logPreCritRT <- log(dat$PreCriticalRT)
+dat$logPreCritRT <- scale(log(dat$PreCriticalRT))
 dat$Cloze_c <- scale(dat$ClozeProb)
 dat$Length_c <- scale(dat$TargetLength)
 dat$Freq_c <- scale(dat$TargetFreq)
@@ -709,7 +709,7 @@ summary(m_spill2_cloze)
 
 Lmer with binary expectancy as predictor:
 
-```{r  lmer-spillover2-binary-expectancy, eval = FALSE}
+```{r lmer-spillover2-binary-expectancy, eval = FALSE}
 m_spill2 <- lmer(logRT ~ Expectancy * Task + Length_c + Freq_c +
                    (1 + Expectancy + Task | Subject) +
                    (1 + Expectancy + Task | Item),
@@ -790,5 +790,21 @@ ggplot(filter(dat_coef, Region != "pre-critical"),
        y = "Coefficient Estimate",
        color = "Predictor") +
   theme_minimal()
+```
+
+Try model with merged spillover regions:
+
+```{r lmer-merged-spillover}
+m_spillover_merged <- lmer(logRT ~ Cloze_c + Task + Cloze_c:Task + Region +
+            Half + Half:Task +
+            Length_c + Freq_c +
+                 TrialCounterTask_c +
+                 logPreCritRT +
+                 (1 + Cloze_c + Task + Half + Region | Subject) +
+                 # (1 + Cloze_c + Task + Half + Length_c + Freq_c | Subject) +
+                 (1 | Item),
+          data = filter(dat, Region %in% c("spill1", "spill2")))
+  
+print(summary(m_spillover_merged))
 ```
 
