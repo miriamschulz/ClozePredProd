@@ -9,19 +9,20 @@ Script by Miriam Schulz
 ABOUT:
 This script loops over all audio files in a given directory
 (.webm, .wav or .mp3), automatically transcribes the recordings using Whisper,
-and outputs the transcripts as a single .csv file for each subject.
+and outputs the transcripts in a single .csv file.
 
-Subjects are extracted from the file names, which need to be of the format:
-recorder_UniqueID_ItemNum_Condition.webm (or .wav or .mp3)
+File names need to be of the format:
+recorder_<UniqueID>_<ItemNum>_<Condition>.webm (or .wav or .mp3)
 
 USAGE:
 python whisper_transcriber.py <whisper_model> <in_dir> <out_dir> <fileformat>
 
-EXAMPLE:
+EXAMPLE 1:
 python whisper_transcriber.py medium recordings whisper_annotations webm
-OR:
-python whisper_transcriber.py small production_data/data_keep/list1_1op9c4
-production_data/whisper_transcriptions webm
+
+EXAMPLE 2:
+python whisper_transcriber.py medium production_data/data_keep/list1_1op9c4/
+production_data/whisper_transcriptions/list1/ webm
 '''
 
 
@@ -74,12 +75,9 @@ total = len(audio_files)
 print(f"{green_font}Found {total} .{file_format} files to annotate." +
       f"{reset_color}\n")
 print("Starting transcriptions...\n")
-os.system("say 'Starting Whisper annotations.'")
 
 # Initiate
 results = []
-subject_results = []
-previous_subject = "none"
 
 # Loop over all files
 for i, file in enumerate(audio_files):
@@ -97,6 +95,7 @@ for i, file in enumerate(audio_files):
                                              fp16=False,
                                              word_timestamps=True)
 
+            # Extract transcription and VOT
             try:
                 segments = transcription['segments'][0]
 
@@ -105,7 +104,7 @@ for i, file in enumerate(audio_files):
                 speech_onset = segments['start']  # voice onset time
                 failed_transcription_flag = False
 
-            # If annotation failed:
+            # If annotation failed
             except:
                 transcription_text = 'NO TEXT DISCOVERED'
                 speech_onset = 'NO ONSET DISCOVERED'
@@ -124,53 +123,38 @@ for i, file in enumerate(audio_files):
                 item = '0'
                 cond = filename[0]
 
-            # Write to file when moving to a new subject
-            if subject != previous_subject and previous_subject != "none":
-                print(f"\nWriting file for subject {previous_subject}.\n")
-                outfilename = f"{path_out}/annotations_{previous_subject}_{model_size}.csv"
-                with open(outfilename, 'w', encoding="utf8") as F:
-                    F.write('\"UniqueID\",\"ItemNum\",\"Condition\",' +
-                            '\"WhisperAnnotation\",\"SpeechOnset\",' +
-                            '\"FilenameRecording\"\n')
-                    for res in subject_results:
-                        out_string = '","'.join(res)
-                        out_string = '"' + out_string + '"\n'
-                        F.write(out_string)  # write in .csv format
-                subject_results = []  # reset for the next subject
-            previous_subject = subject  # update
-
             # Add trial info and transcription to results
             result = [subject, item, cond, transcription_text,
                       str(speech_onset), filename_original]
             results.append(result)
-            subject_results.append(result)
 
             # Print progress
-            font_color = red_font if failed_transcription_flag else green_font
+            font_color = red_font if failed_transcription_flag else blue_font
             print(f"{blue_font}Processed file no. {i+1} / {total}  ---  " +
                   f"{file}  ---  {font_color}{transcription_text}{reset_color}")
 
+        # If the file is to be skipped (test, filler etc), print a message
         else:
             print(f"{red_font}Skipping file {i+1} {file}{reset_color}")
-
-        # Write file for the the final subject
-        if i+1 == total:
-            print(f"\n{green_font}Writing file for subject {previous_subject}" +
-                  f" (final subject).{reset_color}\n")
-            outfilename = f"{path_out}/annotations_{previous_subject}_{model_size}.csv"
-            with open(outfilename, 'w', encoding="utf8") as F:
-                F.write('\"UniqueID\",\"ItemNum\",\"Condition\",' +
-                        '\"WhisperAnnotation\",\"SpeechOnset\",' +
-                        '\"FilenameRecording\"\n')
-                for res in subject_results:
-                    out_string = '","'.join(res)
-                    out_string = '"' + out_string + '"\n'
-                    F.write(out_string)  # write in .csv format
 
     else:
         print(f"{red_font}No .{file_format} files found in {path}." +
               f"{reset_color}\n")
+        os.system("say 'No files found to annotate.'")
         sys.exit(1)
 
-print('Done.\n')
-os.system("say 'Finished Whisper annotations.'")
+# Write results to file
+print(f"\n{green_font}Writing file for subject {subject}." +
+      f"{reset_color}\n")
+outfilename = f"{path_out}/annotations_{subject}_{model_size}.csv"
+with open(outfilename, 'w', encoding="utf8") as F:
+    F.write('\"UniqueID\",\"ItemNum\",\"Condition\",' +
+            '\"WhisperAnnotation\",\"SpeechOnset\",' +
+            '\"FilenameRecording\"\n')
+    for res in results:
+        out_string = '","'.join(res)
+        out_string = '"' + out_string + '"\n'
+        F.write(out_string)
+
+# Success message
+os.system("say 'Finished annotations for the current subject.'")
