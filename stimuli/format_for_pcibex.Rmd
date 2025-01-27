@@ -174,8 +174,20 @@ all$AnswerKey <- ifelse(all$Answer == "FALSE", "F",
                         ifelse(all$Answer == "TRUE", "J", ""))
 ```
 
+Export the formatted stimuli:
+
 ```{r}
-write.csv(all, "stim_exp_preprocessed.csv", row.names = FALSE)
+export <- all
+export$FullSentence <- paste(export$Sentence, export$End)
+export$FullSentence <- gsub("\\s{2,}", " ", export$FullSentence)
+export$FullSentence <- gsub(",", " , ", export$FullSentence)  # padding for surprisal
+export$FullSentence <- gsub("\\.", "", export$FullSentence)  # remove full stops
+export$FullSentence <- trimws(export$FullSentence, which = "both")
+# Only keep one version of the fillers:
+export <- export %>% 
+  filter(!(Type == "ExpFiller" & Group == 2))
+write.csv(export, "stimuli.csv", row.names = FALSE)
+print("Wrote formatted stimuli to file: 'stimuli.csv'.")
 ```
 
 
