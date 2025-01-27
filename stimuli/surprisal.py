@@ -15,10 +15,9 @@ import torch.nn.functional as F
 def chunkstring(string, length):
     return (list(string[0+i:length+i] for i in range(0, len(string), length)))
 
-
-def BPE_split(word):
-    encoded_w = tokenizer.encode(word) # type: list
-    return 1 if len(encoded_w)>2 else 0 # needs to be >2 because secret gpt2 will append </s> id to every encoding
+#def BPE_split(word):
+#    encoded_w = tokenizer.encode(word) # type: list
+#    return 1 if len(encoded_w)>2 else 0 # needs to be >2 because secret gpt2 will append </s> id to every encoding
 
 def get_surprisal(seq):
     max_input_size = int(0.75*8000)
@@ -66,18 +65,26 @@ def get_surprisal(seq):
     # convert back surprisals into probs for later use
     probs = [1/(2**s) for s in surprisals]
 
-    #print(words[-1])
-    #print(surprisals[-1])
-    print(words)
-    print(probs)
-    print(surprisals)
+    #print(words)
+    #print(surprisals)
+    #print(probs)
+    # Print progress:
+    if len(surprisals) >= 5:
+        target_surprisal = surprisals[4]
+        print(f'Target: {words[4]}, Surprisal: {str(round(target_surprisal, 4))}')
+    else:
+        target_surprisal = None
 
-    return surprisals[-1]   # surprisals[-1]
+    surprisals = " ".join(map(str, surprisals))
+    probs = " ".join(map(str, probs))
+
+    return surprisals, target_surprisal, probs   # surprisals[-1]
 
 def get_surprisal_file(model, chosen_model, filename):
     df = pd.read_csv(filename, sep=',', encoding='utf-8')
-    df['surprisal'] = df['FullSentence'].apply(get_surprisal)
-    df['BPE_split'] = df['FullSentence'].apply(BPE_split)
+    df[['surprisal', 'target_surprisal', 'probs']] = pd.DataFrame(df['FullSentence'].apply(get_surprisal).tolist(), index=df.index)
+    #df['surprisal'] = df['FullSentence'].apply(get_surprisal)
+    #df['BPE_split'] = df['FullSentence'].apply(BPE_split)
     out_filename = f'{filename.rstrip('.csv')}_surprisal_{chosen_model}.csv'
     print(out_filename)
     df.to_csv(out_filename,
