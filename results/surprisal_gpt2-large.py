@@ -1,3 +1,4 @@
+import sys
 import os
 import argparse
 import numpy as np
@@ -65,39 +66,45 @@ def get_surprisal(seq):
     # convert back surprisals into probs for later use
     probs = [1/(2**s) for s in surprisals]
 
-    print(words[-1])
-    print(surprisals[-1])
+    #print(words[-1])
+    #print(surprisals[-1])
+    print(words)
     print(probs)
     print(surprisals)
 
     return surprisals[-1]   # surprisals[-1]
 
-
-
-def get_surprisal_file(model, filename):
+def get_surprisal_file(model, chosen_model, filename):
     df = pd.read_csv(filename, sep=',', encoding='utf-8')
-    df['gpt2-large_s'] = df['Sentence'].apply(get_surprisal)
-    df['BPE_split'] = df['TargetWord'].apply(BPE_split)
-    df.to_csv(f'./stimuli_mini_surprisals.csv',sep=';',encoding='utf-8',index=False)
+    df['surprisal'] = df['FullSentence'].apply(get_surprisal)
+    df['BPE_split'] = df['FullSentence'].apply(BPE_split)
+    out_filename = f'{filename.rstrip('.csv')}_surprisal_{chosen_model}.csv'
+    print(out_filename)
+    df.to_csv(out_filename,
+              sep = ',', encoding = 'utf-8', index = False)
     return df
 
 
 if __name__=='__main__':
 
-    model_name = 'openai-community/gpt2-large'  # or: NEO
-    print('Loading model...')
+    if len(sys.argv) != 3:
+        print(f"\nUSAGE:   {sys.argv[0]} <model> <stimmuli file>")
+        print(f"EXAMPLE: {sys.argv[0]} gpt2-large stimuli.csv\n")
+        sys.exit(1)
+
+    chosen_model = sys.argv[1]
+    filename = sys.argv[2]
+    #model_name = 'openai-community/gpt2-large'  # or: NEO
+    model_name = 'openai-community/' + chosen_model
+    print('Loading model: ' + chosen_model + '...')
+
     # Creating model and tokenizer instances
     tokenizer = AutoTokenizer.from_pretrained(model_name, add_prefix_space=True)
     model = AutoModelForCausalLM.from_pretrained(model_name)
     model.eval()
 
-    #if '7b' in model_name:
-    #    m_param = '7b'
-    #elif '13b' in model_name:
-    #    m_param = '13b'
-    #get_surprisal_all(m_param)
-    filename = './stimuli_mini.csv'
+    #filename = './stimuli_mini.csv'
 
-    get_surprisal_file(model, filename)
+    get_surprisal_file(model, chosen_model, filename)
 
     print('Done')
