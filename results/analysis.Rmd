@@ -46,12 +46,13 @@ strong_item_subset = FALSE
 cloze_difference <- 0.5
 
 # Limit how many/which plots to generate:
-generate_main_plots = TRUE
+generate_main_plots = FALSE
 plot_inidividual_subjects = FALSE
 plot_inidividual_items = FALSE
 
 # Quit before running the models:
-run_models = TRUE
+run_models = FALSE
+run_surprisal_models = TRUE
 ```
 
 ## Load data
@@ -63,8 +64,9 @@ load("results_preprocessed_targetregions.RData")
 load("results_preprocessed_allregions.RData")
 ```
 
+# Subset analyses (optional)
 
-# Strong item subset analysis (optional)
+## Strong item subset
 
 Set `use_subset = TRUE` to look only at the "strongest" items in terms of Cloze probability in the entire following script.
 
@@ -97,7 +99,7 @@ if (strong_item_subset == TRUE) {
 ```
 
 
-# Participant subset analysis (optional)
+## Participant subset
 
 TODO: add code from other script here
 
@@ -571,9 +573,9 @@ if (plot_inidividual_items == TRUE) {
 ```
 
 ```{r exit-before-models, include = FALSE}
-if (run_models == FALSE) {
-  knitr::knit_exit()
-}
+# if (run_models == FALSE) {
+#   knitr::knit_exit()
+# }
 ```
 
 
@@ -684,7 +686,7 @@ lmer(logRT ~ Cloze_c + Task + Length_c + Freq_c +
 
 Lmer with binary expectancy as predictor:
 
-```{r  lmer-spillover1-binary-expectancy, eval = FALSE}
+```{r lmer-spillover1-binary-expectancy, eval = FALSE}
 # Spillover 1
 m_spill1 <- lmer(logRT ~ Expectancy * Task + Length_c + Freq_c +
                    (1 + Expectancy + Task | Subject) +
@@ -720,21 +722,7 @@ summary(m_spill2)
 
 ## Plot model coefficients
 
-```{r coef-plot}
-get_coefficients <- function(m) {
-  coef_data <- coef(summary(m)) %>%
-  as.data.frame() %>%
-  rownames_to_column(var = "term") %>%
-  filter(term != "(Intercept)") %>% 
-  dplyr::rename(
-    estimate = Estimate,
-    std.error = `Std. Error`,
-    statistic = `t value`,
-    p.value = `Pr(>|t|)`
-  )
-  return(coef_data)
-}
-
+```{r coef-plot, eval = run_models}
 dat_coef <- NULL
 # for (region in c("pre-critical", "target", "spill1", "spill2")) {
 for (region in c("target", "spill1", "spill2")) {
@@ -790,11 +778,16 @@ ggplot(filter(dat_coef, Region != "pre-critical"),
        y = "Coefficient Estimate",
        color = "Predictor") +
   theme_minimal()
+
+ggsave("./plots/model_coefficients.png", plot = last_plot(),
+       width=10, height=7, dpi=320)
 ```
+
+## Merged spillover regions model
 
 Try model with merged spillover regions:
 
-```{r lmer-merged-spillover}
+```{r lmer-merged-spillover, eval = run_models}
 m_spillover_merged <- lmer(logRT ~ Cloze_c + Task + Cloze_c:Task + Region +
             Half + Half:Task +
             Length_c + Freq_c +
@@ -806,5 +799,268 @@ m_spillover_merged <- lmer(logRT ~ Cloze_c + Task + Cloze_c:Task + Region +
           data = filter(dat, Region %in% c("spill1", "spill2")))
   
 print(summary(m_spillover_merged))
+```
+
+
+# Surprisal analysis
+
+```{r read-surprisals}
+surprisals_gpt2_large <- read.csv("stimuli_surprisal_gpt2-large.csv", header = TRUE)
+surprisals_gpt_neo <- read.csv("stimuli_surprisal_gpt-neo-2,7.csv", header = TRUE)
+
+surprisals_gpt2_large <- surprisals_gpt2_large %>% 
+  select(c("ItemNum", "ExpCondition", "TargetWord",
+           "TargetSurprisal", "Surprisals", "Probs")) %>% 
+  dplyr::rename(ExpItemNum = ItemNum,
+                TargetSurprisalGpt2Large = TargetSurprisal,
+                SurprisalsGpt2Large = Surprisals,
+                ProbsGpt2Large = Probs)
+
+surprisals_gpt_neo <- surprisals_gpt_neo %>% 
+  select(c("ItemNum", "ExpCondition", "TargetWord",
+           "TargetSurprisal", "Surprisals", "Probs")) %>% 
+  dplyr::rename(ExpItemNum = ItemNum,
+                TargetSurprisalGptNeo = TargetSurprisal,
+                SurprisalsGptNeo = Surprisals,
+                ProbsGptNeo = Probs)
+
+dat_surprisals <- merge(dat, surprisals_gpt2_large,
+                        by = c("ExpItemNum", "ExpCondition", "TargetWord"))
+dat_surprisals <- merge(dat_surprisals, surprisals_gpt_neo,
+                        by = c("ExpItemNum", "ExpCondition", "TargetWord"))
+```
+
+## Correlation between Surprisal and Cloze
+
+```{r correlation-surprisal-cloze}
+dat_surprisals_mini <- dat_surprisals %>%
+  select("ExpItemNum", "ExpCondition", "TargetWord",
+         "ClozeProb", "TargetSurprisalGpt2Large", "TargetSurprisalGptNeo") %>% 
+  unique()
+
+# Pearson
+cor(dat_surprisals_mini$ClozeProb,
+    dat_surprisals_mini$TargetSurprisalGpt2Large)
+cor(dat_surprisals_mini$ClozeProb,
+    dat_surprisals_mini$TargetSurprisalGptNeo)
+
+# Spearman
+cor(dat_surprisals_mini$ClozeProb,
+    dat_surprisals_mini$TargetSurprisalGpt2Large,
+    method = "spearman")
+cor(dat_surprisals_mini$ClozeProb,
+    dat_surprisals_mini$TargetSurprisalGptNeo,
+    method = "spearman")
+
+ggplot(dat_surprisals_mini, aes(x = ClozeProb,
+                                y = TargetSurprisalGpt2Large,
+                                color = ExpCondition
+                                )) +
+  geom_point(size = 3) + 
+  geom_text(aes(label = TargetWord), vjust = -0.5, size = 4) +
+  geom_smooth(method = "lm", formula = y ~ x, color = "darkred", se = TRUE) +
+  labs(
+    title = "Correlation between Cloze Probability and Surprisal",
+    subtitle = "gpt2-large, 812M parameters",
+    x = "Target Cloze Probability",
+    y = "Target Surprisal (gpt2-large)",
+    color = "Condition"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 16, face = "italic", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  ) +
+  scale_color_manual(values = c("navy", "steelblue1"))
+
+ggsave("./plots/Surprisal_cloze_correlation_gpt2-large.png", plot = last_plot(),
+       width=10, height=8, dpi=320)
+
+ggplot(dat_surprisals_mini, aes(x = ClozeProb,
+                                y = TargetSurprisalGptNeo,
+                                color = ExpCondition
+                                )) +
+  geom_point(size = 3) + 
+  geom_text(aes(label = TargetWord), vjust = -0.5, size = 4) +
+  geom_smooth(method = "lm", formula = y ~ x, color = "darkred", se = TRUE) +
+  labs(
+    title = "Correlation between Cloze Probability and Surprisal",
+    subtitle = "GPT-Neo, 2.72B parameters",
+    x = "Target Cloze Probability",
+    y = "Target Surprisal (GPT-Neo)",
+    color = "Condition"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 16, face = "italic", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  ) +
+  scale_color_manual(values = c("navy", "steelblue1"))
+
+ggsave("./plots/Surprisal_cloze_correlation_gpt-neo.png", plot = last_plot(),
+       width=10, height=8, dpi=320)
+```
+
+
+## Correlation between Surprisal and Target RTs
+
+```{r correlation-surprisal-rts}
+dat_surprisals_mini <- dat_surprisals %>%
+  filter(Region == "target") %>% 
+  select("Item", "ExpCondition", "TargetWord",
+         "Region", "Task", "Half",
+         "Subject", "RT", "logRT",
+         "ClozeProb", "TargetSurprisalGpt2Large", "TargetSurprisalGptNeo")
+
+# Correlation RTs & cloze probability (sanity check)
+cor(dat_surprisals_mini$logRT,
+    dat_surprisals_mini$ClozeProb)
+
+# Correlation RTs & surprisal (sanity check)
+cor(dat_surprisals_mini$logRT,
+    dat_surprisals_mini$TargetSurprisalGpt2Large)
+
+# Correlation RTs & surprisal (sanity check)
+cor(dat_surprisals_mini$logRT,
+    dat_surprisals_mini$TargetSurprisalGptNeo)
+```
+
+### LMER with gpt2-large surprisal as predictor
+
+```{r surprisal-models-gpt2-large}
+# Models
+surprisal_models <- list()
+dat_coef <- NULL
+dat_surprisals$TargetSurprisalGpt2Large_c <- scale(dat_surprisals$TargetSurprisalGpt2Large)
+
+for (region in c("target", "spill1", "spill2")) {
+  
+  dat_region <- dat_surprisals %>% filter(Region == region)
+
+  m <- lmer(logRT ~ TargetSurprisalGpt2Large_c * Task +
+              Half + Half:Task +
+              Length_c + Freq_c +
+              TrialCounterTask_c +
+              logPreCritRT +
+              (1 + TargetSurprisalGpt2Large_c + Task + Half | Subject) +
+              (1 | Item),
+            data = dat_region)
+  
+  print("---------------------------------------------------------------------")
+  print("MODEL SUMMARY FOR REGION:")
+  print(region)
+  print(summary(m))
+            
+  coef_region <- get_coefficients(m)
+  coef_region$Region <- region
+  
+  if (!exists("dat_coef")) {
+    dat_coef <- coef_region
+    } else {
+    dat_coef <- rbind(dat_coef, coef_region)
+  }
+}
+
+dat_coef$Region <- factor(dat_coef$Region, levels =
+                            c("pre-critical","target",
+                              "spill1", "spill2"))
+
+ggplot(filter(dat_coef, Region != "pre-critical"),
+       aes(x = Region, y = estimate,
+           color = term)) +
+  geom_errorbar(aes(ymin = estimate - std.error,
+                    ymax = estimate + std.error,
+                    color = term),
+                width=0.1, linewidth=0.3) +
+  geom_point(aes(shape = p.value < 0.05), size = 3) +
+  geom_hline(yintercept = 0, color = "black") +
+  scale_shape_manual(values = c(13, 19)) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Model Coefficients",
+       x = "Region",
+       y = "Coefficient Estimate",
+       color = "Predictor") +
+  theme_minimal()
+
+ggsave("./plots/model_coefficients_surprisal_gpt2-large.png", plot = last_plot(),
+       width=10, height=7, dpi=320)
+```
+
+
+### LMER with GPT-Neo surprisal as predictor
+
+```{r surprisal-models-gpt2-neo}
+# Models
+surprisal_models <- list()
+dat_coef <- NULL
+dat_surprisals$TargetSurprisalGptNeo <- scale(dat_surprisals$TargetSurprisalGptNeo)
+
+for (region in c("target", "spill1", "spill2")) {
+  
+  dat_region <- dat_surprisals %>% filter(Region == region)
+
+  m <- lmer(logRT ~ TargetSurprisalGptNeo * Task +
+              Half + Half:Task +
+              Length_c + Freq_c +
+              TrialCounterTask_c +
+              logPreCritRT +
+              (1 + TargetSurprisalGptNeo + Task + Half | Subject) +
+              (1 | Item),
+            data = dat_region)
+  
+  print("---------------------------------------------------------------------")
+  print("MODEL SUMMARY FOR REGION:")
+  print(region)
+  print(summary(m))
+            
+  coef_region <- get_coefficients(m)
+  coef_region$Region <- region
+  
+  if (!exists("dat_coef")) {
+    dat_coef <- coef_region
+    } else {
+    dat_coef <- rbind(dat_coef, coef_region)
+  }
+}
+
+dat_coef$Region <- factor(dat_coef$Region, levels =
+                            c("pre-critical","target",
+                              "spill1", "spill2"))
+
+ggplot(filter(dat_coef, Region != "pre-critical"),
+       aes(x = Region, y = estimate,
+           color = term)) +
+  geom_errorbar(aes(ymin = estimate - std.error,
+                    ymax = estimate + std.error,
+                    color = term),
+                width=0.1, linewidth=0.3) +
+  geom_point(aes(shape = p.value < 0.05), size = 3) +
+  geom_hline(yintercept = 0, color = "black") +
+  scale_shape_manual(values = c(13, 19)) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Model Coefficients",
+       x = "Region",
+       y = "Coefficient Estimate",
+       color = "Predictor") +
+  theme_minimal()
+
+ggsave("./plots/model_coefficients_surprisal_gpt-neo.png", plot = last_plot(),
+       width=10, height=7, dpi=320)
 ```
 
