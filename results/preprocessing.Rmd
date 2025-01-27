@@ -232,24 +232,24 @@ if (exclude_participants == TRUE) {
     filter(!UniqueID %in% c(# FIRST PROLIFIC EXPERIMENT:
                             "vuqqnd",  # non-native, super slow RTs
                             "ee49u2",  # non-native
-                            "vznkz3",  # non-native?, some double submissions (tecnnical problems)
+                            "vznkz3",  # non-native?, some double submissions (technical problems)
                             "3jw4ew",  # non-native
                             "ps4dv4",  # non-native, did not understand the task
                             # SECOND PROLIFIC EXPERIMENT:
                             "2jcruh",  # non-native and makes a funny voice on many trials
-                            "e2zqww",  # read contexts aloud                                       ----CHECK
+                            "e2zqww",  # read contexts aloud 
                             "0jxphp",  # empty recordings, ~50% acc, super fast RTs [RETURNED]
                             "m7ugwz",  # read contexts aloud (but faster than in comprehension)
                             "jocpf0",  # non-native and timed out (restarted)
                             "pizxpx",  # empty recordings
                             "hpttkp",  # nonsense and repeating answers [RETURNED]
-                            "icak56",  # non-native??                                              ----CHECK
+                            "icak56",  # non-native??
                             "8v42p8",  # non-native?, very slow on production RTs (~1000ms)
-                            "bdhmxy",  # non-native?, very slow RTs in both tasks                   ----CHECK
+                            "bdhmxy",  # non-native, very slow RTs in both tasks
                             "glbu6a",  # non-native, repeated last context words, wrong browser [RETURNED]
                             "6wqbuo",  # non-native
                             "-u775t",  # technical problems: restarted 3x; loud background talking
-                            "ev0tqj",  # read contexts aloud in one prod block                       ----CHECK
+                            "ev0tqj",  # read contexts aloud in one prod block 
                             "4ftnhn",  # no server data; born in Ghana; completion time too long
                             "teg94q")  # non-native, comp accuracy ~50%, too many timeouts
     )
@@ -290,7 +290,7 @@ xtabs(~ UniqueID + Block, completeness)  # should show 40 for each block
 # xtabs(~ UniqueID + LatinList, completeness)  # must show 160 or 0 everywhere
 completeness %>%
   select(LatinList, UniqueID) %>%
-  arrange(LatinList) %>% 
+  arrange(LatinList, UniqueID) %>% 
   unique()
 
 # Random order
@@ -558,8 +558,10 @@ Get participants who were invariant between the production / comprehension task 
 
 ```{r remove-invariant-subjects}
 if (exclude_invariant_participants == TRUE) {
-  dat <- remove_invavriant_subjects(dat)
-  dat_all <- remove_invavriant_subjects(dat_all)
+  dat <- remove_invavriant_subjects(dat, leniency = 10,
+                                    remove_which = "invariant")
+  dat_all <- remove_invavriant_subjects(dat_all, leniency = 10,
+                                        remove_which = "invariant")
 }
 ```
 

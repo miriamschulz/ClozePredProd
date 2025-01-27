@@ -197,7 +197,9 @@ remove_fast_subjects <- function(df, threshold=200) {
 }
 
 # Remove subjects with invariant RTs between production and comprehension
-remove_invavriant_subjects <- function(df, leniency = 10) {
+remove_invavriant_subjects <- function(df,
+                                       leniency = 10,
+                                       remove_which = "invariant") {
   nrow_orig <- nrow(df)
   
   # Get mean RT by Task and Subject
@@ -206,13 +208,21 @@ remove_invavriant_subjects <- function(df, leniency = 10) {
     dplyr::summarize(mean_RT = mean(RT, na.rm = TRUE), .groups = "drop")
   
   # Identify subjects whose RT in production > RT in comprehension
-  varying_subjects <- df_rt_by_task %>%
-    pivot_wider(names_from = Task, values_from = mean_RT) %>% # 
-    # dplyr::filter(Production > Comprehension + leniency |
-    #                 Comprehension > Production + leniency) %>%
-    dplyr::filter(Production > Comprehension + leniency) %>% 
-    pull(UniqueID)
-  
+  if (remove_which == "invariant") {
+    print("Removing invariant participants.")
+    varying_subjects <- df_rt_by_task %>%
+      pivot_wider(names_from = Task, values_from = mean_RT) %>% # 
+      dplyr::filter(Production > Comprehension + leniency) %>% 
+      pull(UniqueID)
+  } else {
+    print("Removing invariant participants and those with longe RTs in comprehension.")
+    varying_subjects <- df_rt_by_task %>%
+      pivot_wider(names_from = Task, values_from = mean_RT) %>% # 
+      dplyr::filter(Production > Comprehension + leniency |
+                      Comprehension > Production + leniency) %>%
+      pull(UniqueID)
+  }
+
   # Divide the data into participants with varying vs. invariant task RTs
   
   # a. varying
@@ -242,4 +252,18 @@ remove_invavriant_subjects <- function(df, leniency = 10) {
     print()
   
   return(df_varying_subjects)
+}
+
+get_coefficients <- function(m) {
+  coef_data <- coef(summary(m)) %>%
+    as.data.frame() %>%
+    rownames_to_column(var = "term") %>%
+    filter(term != "(Intercept)") %>% 
+    dplyr::rename(
+      estimate = Estimate,
+      std.error = `Std. Error`,
+      statistic = `t value`,
+      p.value = `Pr(>|t|)`
+    )
+  return(coef_data)
 }
