@@ -42,17 +42,21 @@ Some script parameters (flags) that will determine which sections of the script 
 
 ```{r flags}
 # Use only a subset of strong items with the minimal specified Cloze difference:
-strong_item_subset = FALSE
+strong_item_subset <- FALSE
 cloze_difference <- 0.5
 
 # Limit how many/which plots to generate:
-generate_main_plots = FALSE
-plot_inidividual_subjects = FALSE
-plot_inidividual_items = FALSE
+generate_main_plots <- FALSE
+plot_inidividual_subjects <- FALSE
+plot_inidividual_items<- FALSE
+plot_inidividual_items_surprisal <- TRUE
 
-# Quit before running the models:
-run_models = FALSE
-run_surprisal_models = TRUE
+# Run models:
+run_models <- FALSE
+
+# Run surprisal analyses:
+run_surprisal_models<- FALSE
+strong_surprisal_subset <- TRUE
 ```
 
 ## Load data
@@ -68,7 +72,7 @@ load("results_preprocessed_allregions.RData")
 
 ## Strong item subset
 
-Set `use_subset = TRUE` to look only at the "strongest" items in terms of Cloze probability in the entire following script.
+Set `strong_item_subset = TRUE` in the flags at the top of this script to look only at the "strongest" items in terms of Cloze probability in the entire following script.
 
 ```{r subset-strong-items}
 if (strong_item_subset == TRUE) {
@@ -194,7 +198,7 @@ ggplot(data = dat_plot,
   labs(color = "Expectancy") +
   xlab("Region") +
   ylab("Reading Time (ms)") +
-  ggtitle("Reading Times by Region and Task Order") +
+  ggtitle("Reading Times by Region and Experiment Half") +
   theme_minimal() +
   theme(
     axis.title.x = element_text(size = 14, face = "bold"),
@@ -212,6 +216,52 @@ ggplot(data = dat_plot,
 ggsave("./plots/RTs_task_order.png", plot = last_plot(),
        width=10, height=7, dpi=320)
 ```
+
+
+## RTs by block + task
+
+```{r rt-line-plot-taskorder, eval = generate_main_plots, fig.height=5, fig.width=8}
+# Generate a summary data frame including the SE:
+dat_plot <- summarySE(dat,
+                      measurevar="RT",
+                      groupvars=c("Region", "ExpCondition",
+                                  "Task", "Block"),
+                      na.rm=T)
+
+ggplot(data = dat_plot,
+       aes(x = Region,
+           y = RT,
+           color = ExpCondition,
+           linetype = Task,
+           group = interaction(ExpCondition, Task))) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
+                width = 0.2, 
+                linewidth = 0.5) +
+  facet_wrap(~Block, nrow = 1) +
+  labs(color = "Expectancy") +
+  xlab("Region") +
+  ylab("Reading Time (ms)") +
+  ggtitle("Reading Times by Region and Block") +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 16, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  ) +
+  scale_color_manual(values = c("navy", "steelblue1"))
+
+ggsave("./plots/RTs_by_block.png", plot = last_plot(),
+       width=15, height=7, dpi=320)
+```
+
 
 
 ## RTs over time by subject
@@ -599,6 +649,9 @@ dat$Half <- factor(dat$Half, levels = c("First Half", "Second Half"))
 contrasts(dat$Half) <- c(-0.5, 0.5)
 colnames(attr(dat$Half, "contrasts")) <- c("Second")  # rename factor level
 
+dat$Block <- as.factor(dat$Block)
+contrasts(dat$Block) <- contr.sum(4)
+
 dat$TaskOrder <- factor(dat$TaskOrder, levels = c("comp_prod", "prod_comp"))
 contrasts(dat$TaskOrder) <- c(-0.5, 0.5)
 colnames(attr(dat$TaskOrder, "contrasts")) <- c("Prod<Comp")  # rename factor level
@@ -612,7 +665,8 @@ dat$logPreCritRT <- scale(log(dat$PreCriticalRT))
 dat$Cloze_c <- scale(dat$ClozeProb)
 dat$Length_c <- scale(dat$TargetLength)
 dat$Freq_c <- scale(dat$TargetFreq)
-
+dat <- dat %>% 
+  mutate(WordLength = nchar(Word))
 dat$TrialCounterTask_c <- scale(dat$TrialCounterTask)
 dat$TrialCounterGlobal_c <- scale(dat$TrialCounterGlobal)
 
@@ -736,6 +790,7 @@ for (region in c("target", "spill1", "spill2")) {
   m <- lmer(logRT ~ Cloze_c + Task + Cloze_c:Task +
               Half + Half:Task +
               Length_c + Freq_c +
+              #scale(WordLength) +
                    TrialCounterTask_c +
                    logPreCritRT +
                    (1 + Cloze_c + Task + Half | Subject) +
@@ -777,7 +832,18 @@ ggplot(filter(dat_coef, Region != "pre-critical"),
        x = "Region",
        y = "Coefficient Estimate",
        color = "Predictor") +
-  theme_minimal()
+  theme_minimal() + 
+    theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
 
 ggsave("./plots/model_coefficients.png", plot = last_plot(),
        width=10, height=7, dpi=320)
@@ -785,28 +851,55 @@ ggsave("./plots/model_coefficients.png", plot = last_plot(),
 
 ## Merged spillover regions model
 
-Try model with merged spillover regions:
+Try model with merged spillover regions (simple su or mean).
+
+NOTE THAT THESE MODELS WILL BE EQUIVALENT BESIDES A SLIGHT OFFSET IN THE INTERCEPT,
+namely $−log(2)$, because $log(\frac{A}{B}) = log(A) - log(B)$:  
+so for the mean, logRT will be $log(\frac{RTspill1 + RTspill2}{2}) = log(RTspill1 + RTspill2) - log(2)$,
+while it is simply $log(RTspill1 + RTspill2)$ for the sum.  
+Hence, the only difference is the constant offset $−log(2)$ for the mean, which only influences the intercept but does not impact the relationship between the predictors in the model.
+
 
 ```{r lmer-merged-spillover, eval = run_models}
-m_spillover_merged <- lmer(logRT ~ Cloze_c + Task + Cloze_c:Task + Region +
-            Half + Half:Task +
-            Length_c + Freq_c +
-                 TrialCounterTask_c +
-                 logPreCritRT +
-                 (1 + Cloze_c + Task + Half + Region | Subject) +
-                 # (1 + Cloze_c + Task + Half + Length_c + Freq_c | Subject) +
-                 (1 | Item),
-          data = filter(dat, Region %in% c("spill1", "spill2")))
-  
-print(summary(m_spillover_merged))
+dat_merged_spill <- dat %>%
+  select(-Word, -WordPosition, -WordLength, -logRT) %>%  # Exclude the two columns
+  pivot_wider(names_from = Region, values_from = RT, names_prefix = "RT")
+dat_merged_spill$SumSpillRT <- ifelse(!is.na(dat_merged_spill$RTspill1) &
+                                         !is.na(dat_merged_spill$RTspill2),
+                                       dat_merged_spill$RTspill1 +
+                                         dat_merged_spill$RTspill2,
+                                       NA)
+dat_merged_spill$MeanSpillRT <- dat_merged_spill$SumSpillRT / 2
+
+dat_merged_spill$logSumSpillRT <- log(dat_merged_spill$SumSpillRT)
+dat_merged_spill$logMeanSpillRT <- log(dat_merged_spill$MeanSpillRT)
+
+m_spillover_sum <- lmer(logSumSpillRT ~ Cloze_c + Task + Cloze_c:Task +
+                             Half + Half:Task +
+                             Length_c + Freq_c + TrialCounterTask_c +
+                             logPreCritRT +
+                             (1 + Cloze_c + Task + Half | Subject) +
+                             (1 | Item),
+                           data = dat_merged_spill)
+print(summary(m_spillover_sum))
+
+m_spillover_mean <- lmer(logMeanSpillRT ~ Cloze_c + Task + Cloze_c:Task +
+                             Half + Half:Task +
+                             Length_c + Freq_c + TrialCounterTask_c +
+                             logPreCritRT +
+                             (1 + Cloze_c + Task + Half | Subject) +
+                             (1 | Item),
+                           data = dat_merged_spill)
+print(summary(m_spillover_mean))
 ```
 
 
-# Surprisal analysis
+# Surprisal analyses
 
 ```{r read-surprisals}
 surprisals_gpt2_large <- read.csv("stimuli_surprisal_gpt2-large.csv", header = TRUE)
-surprisals_gpt_neo <- read.csv("stimuli_surprisal_gpt-neo-2,7.csv", header = TRUE)
+surprisals_gpt_neo <- read.csv("stimuli_surprisal_gpt-neo.csv", header = TRUE)
+surprisals_llama <- read.csv("stimuli_surprisal_llama.csv", header = TRUE)
 
 surprisals_gpt2_large <- surprisals_gpt2_large %>% 
   select(c("ItemNum", "ExpCondition", "TargetWord",
@@ -824,18 +917,39 @@ surprisals_gpt_neo <- surprisals_gpt_neo %>%
                 SurprisalsGptNeo = Surprisals,
                 ProbsGptNeo = Probs)
 
+surprisals_llama <- surprisals_llama %>% 
+  select(c("ItemNum", "ExpCondition", "TargetWord",
+           "TargetSurprisal", "Surprisals", "Probs")) %>% 
+  dplyr::rename(ExpItemNum = ItemNum,
+                TargetSurprisalLlama = TargetSurprisal,
+                SurprisalsLlama = Surprisals,
+                ProbsLlama= Probs)
+
 dat_surprisals <- merge(dat, surprisals_gpt2_large,
                         by = c("ExpItemNum", "ExpCondition", "TargetWord"))
 dat_surprisals <- merge(dat_surprisals, surprisals_gpt_neo,
                         by = c("ExpItemNum", "ExpCondition", "TargetWord"))
+dat_surprisals <- merge(dat_surprisals, surprisals_llama,
+                        by = c("ExpItemNum", "ExpCondition", "TargetWord"))
+
+dat_surprisals_all <- merge(dat_all, surprisals_gpt2_large,
+                        by = c("ExpItemNum", "ExpCondition", "TargetWord"))
+dat_surprisals_all <- merge(dat_surprisals_all, surprisals_gpt_neo,
+                        by = c("ExpItemNum", "ExpCondition", "TargetWord"))#
+dat_surprisals_all <- merge(dat_surprisals_all, surprisals_llama,
+                        by = c("ExpItemNum", "ExpCondition", "TargetWord"))
+
+dat_surprisals_all <- dat_surprisals_all %>% 
+  mutate(WordLength = nchar(Word))
 ```
 
 ## Correlation between Surprisal and Cloze
 
 ```{r correlation-surprisal-cloze}
 dat_surprisals_mini <- dat_surprisals %>%
-  select("ExpItemNum", "ExpCondition", "TargetWord",
-         "ClozeProb", "TargetSurprisalGpt2Large", "TargetSurprisalGptNeo") %>% 
+  select("ExpItemNum", "ExpCondition", "TargetWord", "ClozeProb",
+         "TargetSurprisalGpt2Large", "TargetSurprisalGptNeo",
+         "TargetSurprisalLlama") %>% 
   unique()
 
 # Pearson
@@ -843,6 +957,8 @@ cor(dat_surprisals_mini$ClozeProb,
     dat_surprisals_mini$TargetSurprisalGpt2Large)
 cor(dat_surprisals_mini$ClozeProb,
     dat_surprisals_mini$TargetSurprisalGptNeo)
+cor(dat_surprisals_mini$ClozeProb,
+    dat_surprisals_mini$TargetSurprisalLlama)
 
 # Spearman
 cor(dat_surprisals_mini$ClozeProb,
@@ -851,6 +967,18 @@ cor(dat_surprisals_mini$ClozeProb,
 cor(dat_surprisals_mini$ClozeProb,
     dat_surprisals_mini$TargetSurprisalGptNeo,
     method = "spearman")
+cor(dat_surprisals_mini$ClozeProb,
+    dat_surprisals_mini$TargetSurprisalLlama,
+    method = "spearman")
+
+# Correlations among the surprisal values themselves (3 pairs)
+cor(dat_surprisals_mini$TargetSurprisalGpt2Large,
+    dat_surprisals_mini$TargetSurprisalGptNeo)
+cor(dat_surprisals_mini$TargetSurprisalGpt2Large,
+    dat_surprisals_mini$TargetSurprisalLlama)
+cor(dat_surprisals_mini$TargetSurprisalGptNeo,
+    dat_surprisals_mini$TargetSurprisalLlama)
+# Makes sense: highest cor between the models closest in terms of N params.
 
 ggplot(dat_surprisals_mini, aes(x = ClozeProb,
                                 y = TargetSurprisalGpt2Large,
@@ -915,6 +1043,38 @@ ggplot(dat_surprisals_mini, aes(x = ClozeProb,
 
 ggsave("./plots/Surprisal_cloze_correlation_gpt-neo.png", plot = last_plot(),
        width=10, height=8, dpi=320)
+
+ggplot(dat_surprisals_mini, aes(x = ClozeProb,
+                                y = TargetSurprisalLlama,
+                                color = ExpCondition
+                                )) +
+  geom_point(size = 3) + 
+  geom_text(aes(label = TargetWord), vjust = -0.5, size = 4) +
+  geom_smooth(method = "lm", formula = y ~ x, color = "darkred", se = TRUE) +
+  labs(
+    title = "Correlation between Cloze Probability and Surprisal",
+    subtitle = "Llama 3: 8B parameters",
+    x = "Target Cloze Probability",
+    y = "Target Surprisal (Llama 3)",
+    color = "Condition"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 16, face = "italic", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  ) +
+  scale_color_manual(values = c("navy", "steelblue1"))
+
+ggsave("./plots/Surprisal_cloze_correlation_llama.png", plot = last_plot(),
+       width=10, height=8, dpi=320)
 ```
 
 
@@ -926,7 +1086,8 @@ dat_surprisals_mini <- dat_surprisals %>%
   select("Item", "ExpCondition", "TargetWord",
          "Region", "Task", "Half",
          "Subject", "RT", "logRT",
-         "ClozeProb", "TargetSurprisalGpt2Large", "TargetSurprisalGptNeo")
+         "ClozeProb", "TargetSurprisalGpt2Large", "TargetSurprisalGptNeo",
+         "TargetSurprisalLlama")
 
 # Correlation RTs & cloze probability (sanity check)
 cor(dat_surprisals_mini$logRT,
@@ -939,11 +1100,15 @@ cor(dat_surprisals_mini$logRT,
 # Correlation RTs & surprisal (sanity check)
 cor(dat_surprisals_mini$logRT,
     dat_surprisals_mini$TargetSurprisalGptNeo)
+
+# Correlation RTs & surprisal (sanity check)
+cor(dat_surprisals_mini$logRT,
+    dat_surprisals_mini$TargetSurprisalLlama)
 ```
 
 ### LMER with gpt2-large surprisal as predictor
 
-```{r surprisal-models-gpt2-large}
+```{r surprisal-models-gpt2-large, eval = run_surprisal_models}
 # Models
 surprisal_models <- list()
 dat_coef <- NULL
@@ -996,32 +1161,42 @@ ggplot(filter(dat_coef, Region != "pre-critical"),
        x = "Region",
        y = "Coefficient Estimate",
        color = "Predictor") +
-  theme_minimal()
+  theme_minimal() + 
+    theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
 
 ggsave("./plots/model_coefficients_surprisal_gpt2-large.png", plot = last_plot(),
        width=10, height=7, dpi=320)
 ```
 
-
 ### LMER with GPT-Neo surprisal as predictor
 
-```{r surprisal-models-gpt2-neo}
+```{r surprisal-models-gpt2-neo, eval = run_surprisal_models}
 # Models
 surprisal_models <- list()
 dat_coef <- NULL
-dat_surprisals$TargetSurprisalGptNeo <- scale(dat_surprisals$TargetSurprisalGptNeo)
+dat_surprisals$TargetSurprisalGptNeo_c <- scale(dat_surprisals$TargetSurprisalGptNeo)
 
 for (region in c("target", "spill1", "spill2")) {
   
   dat_region <- dat_surprisals %>% filter(Region == region)
 
-  m <- lmer(logRT ~ TargetSurprisalGptNeo * Task +
+  m <- lmer(logRT ~ TargetSurprisalGptNeo_c * Task +
               Half + Half:Task +
               Length_c + Freq_c +
               TrialCounterTask_c +
               logPreCritRT +
-              (1 + TargetSurprisalGptNeo + Task + Half | Subject) +
-              (1 | Item),
+              (1 + TargetSurprisalGptNeo_c + Task + Half | Subject) +
+              (1 +  TargetSurprisalGptNeo_c + Task + Half | Item),
             data = dat_region)
   
   print("---------------------------------------------------------------------")
@@ -1058,9 +1233,643 @@ ggplot(filter(dat_coef, Region != "pre-critical"),
        x = "Region",
        y = "Coefficient Estimate",
        color = "Predictor") +
-  theme_minimal()
+  theme_minimal() + 
+    theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
 
 ggsave("./plots/model_coefficients_surprisal_gpt-neo.png", plot = last_plot(),
        width=10, height=7, dpi=320)
 ```
 
+### LMER with Llama surprisal as predictor
+
+```{r surprisal-models-llama, eval = run_surprisal_models}
+# Models
+surprisal_models_llama <- list()
+dat_coef <- NULL
+dat_surprisals$TargetSurprisalLlama_c <- scale(dat_surprisals$TargetSurprisalLlama)
+
+for (region in c("target", "spill1", "spill2")) {
+  
+  dat_region <- dat_surprisals %>% filter(Region == region)
+
+  m <- lmer(logRT ~ TargetSurprisalLlama_c * Task +
+              Half + Half:Task +
+              Length_c + Freq_c +
+              TrialCounterTask_c +
+              logPreCritRT +
+              (1 + TargetSurprisalLlama_c + Task + Half | Subject) +
+              (1 | Item),
+            data = dat_region)
+  surprisal_models_llama <- append(surprisal_models_llama, list(m))
+  
+  print("---------------------------------------------------------------------")
+  print("MODEL SUMMARY FOR REGION:")
+  print(region)
+  print(summary(m))
+            
+  coef_region <- get_coefficients(m)
+  coef_region$Region <- region
+  
+  if (!exists("dat_coef")) {
+    dat_coef <- coef_region
+    } else {
+    dat_coef <- rbind(dat_coef, coef_region)
+  }
+}
+
+dat_coef$Region <- factor(dat_coef$Region, levels =
+                            c("pre-critical","target",
+                              "spill1", "spill2"))
+
+ggplot(filter(dat_coef, Region != "pre-critical"),
+       aes(x = Region, y = estimate,
+           color = term)) +
+  geom_errorbar(aes(ymin = estimate - std.error,
+                    ymax = estimate + std.error,
+                    color = term),
+                width=0.1, linewidth=0.3) +
+  geom_point(aes(shape = p.value < 0.05), size = 3) +
+  geom_hline(yintercept = 0, color = "black") +
+  scale_shape_manual(values = c(13, 19)) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Model Coefficients",
+       x = "Region",
+       y = "Coefficient Estimate",
+       color = "Predictor") +
+  theme_minimal() + 
+    theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    strip.text = element_text(size = 14, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave("./plots/model_coefficients_surprisal_llama.png", plot = last_plot(),
+       width=10, height=7, dpi=320)
+```
+
+
+## Surprisal difference subset 
+
+Subset for a set of items where surprisal in High < surprisal in Low
+(or, if surprisal_difference > 1, additionally with a minimum distance between them):
+
+```{r subset-strong-surprisal}
+surprisal_difference <- 2.65  # resuls in 50-50 split between good vs. bad items
+# surprisal_difference <- 1
+
+if (strong_surprisal_subset == TRUE) {
+  
+  dat_strong <- dat_surprisals %>% 
+    dplyr::group_by(Item, ExpCondition) %>%
+    dplyr::summarise(Surprisal = mean(TargetSurprisalGptNeo), .groups = "drop") %>%
+    pivot_wider(names_from = ExpCondition, values_from = Surprisal) %>% # wide format
+    #mutate(difference = abs(High - Low)) %>%
+    dplyr::filter(High + surprisal_difference <= Low) %>%
+    dplyr::select(Item) %>%
+    inner_join(dat_surprisals, by = "Item")
+
+  dat_strong_surprisals <- dat_surprisals %>% 
+    dplyr::filter(Item %in% dat_strong$Item) %>% 
+    dplyr::arrange(Item, ExpCondition)
+  
+  cat("FILTERING DATA SET FOR STRONG ITEMS ONLY\n")
+  
+  cat("Subsetting data frame for", length(unique(dat_strong_surprisals$Item)),
+      "unique items with a surprisal difference of at least",
+      surprisal_difference, "between conditions.")
+}
+```
+
+Optionally, look at this item set and verify that Surprisal in High is always lower than Surprisal in Low:
+
+```{r check-strong-surprisal-item-check}
+dat_strong_surprisals %>% 
+  select(Item, ExpCondition, TargetWord, TargetSurprisalGptNeo, ClozeProb) %>% 
+  unique()
+```
+
+Plot the RTs for this strong surprisal item subset:
+
+```{r rt-line-plot-strong-surprisal-items, fig.height=5, fig.width=8}
+dat_plot <- summarySE(dat_strong_surprisals,
+                      measurevar="RT",
+                      groupvars=c("Region", "ExpCondition", "Task"),
+                      na.rm=T)
+
+ggplot(data = dat_plot,
+       aes(x = Region,
+           y = RT,
+           color = ExpCondition,
+           linetype = Task,
+           group = ExpCondition)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2, show.legend = FALSE) +
+  geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
+                width = 0.2, 
+                linewidth = 0.5) +
+  facet_wrap(~Task) +
+  xlab("Region") +
+  ylab("Reading Time (ms)") +
+  ggtitle("Reading Times by Task") +
+  labs(color = "Expectancy") +
+  scale_color_manual(values = c("navy", "steelblue1")) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    legend.key.width = unit(1, "cm"),
+    strip.text = element_text(size = 16, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave("./plots/RTs_surprisal_strong.png", plot = last_plot(),
+       width=10, height=7, dpi=320)
+```
+
+Do the same but for the weak surprisal item subset (i.e., the items that were filtered out in the code above):
+
+```{r rt-line-plot-weak-surprisal-items, fig.height=5, fig.width=8}
+dat_weak_surprisals <- dat_surprisals %>% 
+    filter(!(Item %in% dat_strong_surprisals$Item))
+
+# Optionally, look at this item set
+dat_weak_surprisals %>% 
+  select(Item, ExpCondition, TargetWord, TargetSurprisalGptNeo, ClozeProb) %>% 
+  unique()
+
+dat_plot <- summarySE(dat_weak_surprisals,
+                      measurevar="RT",
+                      groupvars=c("Region", "ExpCondition", "Task"),
+                      na.rm=T)
+
+ggplot(data = dat_plot,
+       aes(x = Region,
+           y = RT,
+           color = ExpCondition,
+           linetype = Task,
+           group = ExpCondition)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2, show.legend = FALSE) +
+  geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
+                width = 0.2, 
+                linewidth = 0.5) +
+  facet_wrap(~Task) +
+  xlab("Region") +
+  ylab("Reading Time (ms)") +
+  ggtitle("Reading Times by Task") +
+  labs(color = "Expectancy") +
+  scale_color_manual(values = c("navy", "steelblue1")) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    legend.key.width = unit(1, "cm"),
+    strip.text = element_text(size = 16, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave("./plots/RTs_surprisal_weak.png", plot = last_plot(),
+       width=10, height=7, dpi=320)
+```
+
+
+## Low surprisal in Condition High subset
+
+Subset the items for a low surprisal in the High expectancy condition:
+
+```{r subset-surprisal}
+max_surprisal_high <- 4.9  # resuls in 50-50 split between good vs. bad items
+# max_surprisal_high <- 3
+
+dat_surprisal_max_cond <- dat_surprisals %>% 
+  filter(ExpCondition == "High" &
+           TargetSurprisalGptNeo < max_surprisal_high)
+dat_surprisal_max_cond <- dat_surprisals %>% 
+  filter(Item %in% dat_surprisal_max_cond$Item)
+
+length(unique(dat_surprisal_max_cond$Item))
+```
+
+Plot the RTs for this surprisal item subset with low surprisal in Condition=High:
+
+```{r rt-line-plot-surprisal-items-high-below-threshold, fig.height=5, fig.width=8}
+dat_plot <- summarySE(dat_surprisal_max_cond,
+                      measurevar="RT",
+                      groupvars=c("Region", "ExpCondition", "Task"),
+                      na.rm=T)
+
+ggplot(data = dat_plot,
+       aes(x = Region,
+           y = RT,
+           color = ExpCondition,
+           linetype = Task,
+           group = ExpCondition)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2, show.legend = FALSE) +
+  geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
+                width = 0.2, 
+                linewidth = 0.5) +
+  facet_wrap(~Task) +
+  xlab("Region") +
+  ylab("Reading Time (ms)") +
+  ggtitle("Reading Times by Task") +
+  labs(color = "Expectancy") +
+  scale_color_manual(values = c("navy", "steelblue1")) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    legend.key.width = unit(1, "cm"),
+    strip.text = element_text(size = 16, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave("./plots/RTs_surprisal_high_below_threshold.png", plot = last_plot(),
+       width=10, height=7, dpi=320)
+```
+
+```{r rt-line-plot-surprisal-high-above-threshold, fig.height=5, fig.width=8}
+dat_surprisal_min_cond <- dat_surprisals %>% 
+  filter(!(Item %in% dat_surprisal_max_cond$Item))
+
+dat_plot <- summarySE(dat_surprisal_min_cond,
+                      measurevar="RT",
+                      groupvars=c("Region", "ExpCondition", "Task"),
+                      na.rm=T)
+
+ggplot(data = dat_plot,
+       aes(x = Region,
+           y = RT,
+           color = ExpCondition,
+           linetype = Task,
+           group = ExpCondition)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2, show.legend = FALSE) +
+  geom_errorbar(aes(ymin = RT - se, ymax = RT + se), 
+                width = 0.2, 
+                linewidth = 0.5) +
+  facet_wrap(~Task) +
+  xlab("Region") +
+  ylab("Reading Time (ms)") +
+  ggtitle("Reading Times by Task") +
+  labs(color = "Expectancy") +
+  scale_color_manual(values = c("navy", "steelblue1")) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold"),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    legend.key.width = unit(1, "cm"),
+    strip.text = element_text(size = 16, face = "bold"),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+ggsave("./plots/RTs_surprisal_high_above_threshold.png", plot = last_plot(),
+       width=10, height=7, dpi=320)
+```
+
+
+## Full stimuli correlation analysis
+
+Transform the data frame to extract the surprisal of every word into a new column:
+
+```{r add-surprisal-all-words}
+dat_surprisals_all$WordPosition <- as.numeric(dat_surprisals_all$WordPosition)
+dat_surprisals_all <- dat_surprisals_all %>% 
+  rowwise() %>% 
+  mutate(Gpt2Large = as.numeric(strsplit(SurprisalsGpt2Large, " ")[[1]][WordPosition])) %>%
+  mutate(GptNeo = as.numeric(strsplit(SurprisalsGptNeo, " ")[[1]][WordPosition])) %>%
+  mutate(Llama = as.numeric(strsplit(SurprisalsLlama, " ")[[1]][WordPosition])) %>%
+  ungroup()
+
+# Extract surprisal at each word position
+apply_surprisals_positions <- function(surprisals, pos) {
+    surprisal_values <- strsplit(surprisals, " ")[[1]]  # Split into vector
+    as.numeric(surprisal_values[pos])  # Extract correct index
+}
+
+dat_surprisals_all <- dat_surprisals_all %>%
+  mutate(Gpt2Large = mapply(apply_surprisals_positions, SurprisalsGpt2Large, WordPosition))
+
+dat_surprisals_all <- dat_surprisals_all %>%
+  mutate(GPTNeo = mapply(apply_surprisals_positions, SurprisalsGptNeo, WordPosition))
+
+dat_surprisals_all <- dat_surprisals_all %>%
+  mutate(Llama = mapply(apply_surprisals_positions, SurprisalsLlama, WordPosition))
+
+# delete <- dat_surprisals_all %>%
+#   select(Item, ExpCondition, WordPosition, Word, Gpt2Large, SurprisalsGpt2Large) %>% 
+#   arrange(Item, ExpCondition, WordPosition) %>% 
+#   unique()
+# 
+# write.csv(delete, "delete.csv", row.names = FALSE)
+```
+
+Check the correlations between the surprisal measures themselves:
+
+```{r cor-surprisals-all}
+# Correlations among the surprisal values themselves (3 pairs)
+cor(dat_surprisals_all$Gpt2Large,
+    dat_surprisals_all$GPTNeo)
+cor(dat_surprisals_all$Gpt2Large,
+    dat_surprisals_all$Llama)
+cor(dat_surprisals_all$GPTNeo,
+    dat_surprisals_all$Llama)
+```
+
+As expected: largest similarity between gpt2-large and GPTNeo.
+
+
+```{r cor-word-length-all}
+cor(dat_surprisals_all$WordLength,
+    dat_surprisals_all$Gpt2Large)
+cor(dat_surprisals_all$WordLength,
+    dat_surprisals_all$GPTNeo)
+cor(dat_surprisals_all$WordLength,
+    dat_surprisals_all$Llama)
+```
+
+Correlation keeps increasing!
+
+
+Now the interesting bit: the correlation with RTs:
+
+```{r cor-word-length-all}
+cor(dat_surprisals_all$RT,
+    dat_surprisals_all$Gpt2Large)
+cor(dat_surprisals_all$RT,
+    dat_surprisals_all$GPTNeo)
+cor(dat_surprisals_all$RT,
+    dat_surprisals_all$Llama)
+
+dat_surprisals_all$logRT <- log(dat_surprisals_all$RT)
+cor(dat_surprisals_all$logRT,
+    dat_surprisals_all$Gpt2Large)
+cor(dat_surprisals_all$logRT,
+    dat_surprisals_all$GPTNeo)
+cor(dat_surprisals_all$logRT,
+    dat_surprisals_all$Llama)
+```
+
+Why are these correlation scores so low?!
+
+
+### Generate a by-item RT vs. surprisal plot.
+
+```{r item-surprisal-plots-individual}
+if (plot_inidividual_items_surprisal == TRUE) {
+  
+  dat_plot <- summarySE(dat_surprisals_all,
+                        measurevar="RT",
+                        groupvars=c("Region", "ExpCondition",
+                                    "Task", "Item",
+                                    "WordPosition", "Word",
+                                    "Gpt2Large", "GPTNeo", "Llama"),
+                        na.rm=T)
+  
+  dat_plot$WordPosition <- as.numeric(dat_plot$WordPosition)
+  summary(dat_plot$WordPosition)
+  
+  for (i in unique(as.numeric(as.character(dat_plot$Item)))) {
+    dat_plot_item <- dat_plot %>% 
+      filter(Item == i) %>% 
+      group_by(WordPosition) %>%
+      mutate(Word = if_else(
+        WordPosition == 6,
+        paste(unique(Word[WordPosition == 6]), collapse = "/"),
+        Word)) %>%
+      ungroup()
+    item_no_char <- as.character(unique(dat_plot_item$Item))
+    
+    # Rescale surprisal to RTs
+    dat_plot_item <- dat_plot_item %>%
+      mutate(Surprisal_Gpt2Large_scaled = scales::rescale(Gpt2Large,
+                                                to = range(RT, na.rm = TRUE))) %>% 
+      mutate(Surprisal_GPTNeo_scaled = scales::rescale(GPTNeo,
+                                             to = range(RT, na.rm = TRUE))) %>% 
+      mutate(Surprisal_Llama_scaled = scales::rescale(Llama,
+                                            to = range(RT, na.rm = TRUE)))
+    
+    dat_plot_item_long <- dat_plot_item %>%
+      pivot_longer(
+        cols = starts_with("Surprisal"),
+        names_to = "Measure",
+        values_to = "SurprisalValue"
+      ) %>%
+      mutate(
+        Measure = recode(
+          Measure,
+          "Surprisal_Gpt2Large_scaled" = "GPT2-Large",
+          "Surprisal_GPTNeo_scaled" = "GPTNeo",
+          "Surprisal_Llama_scaled" = "Llama"
+        )
+      )
+    
+    p <- ggplot(dat_plot_item_long,
+                aes(x = WordPosition)) +
+      
+      geom_line(aes(y = RT,
+                    color = ExpCondition,
+                    linetype = Task,
+                    group = interaction(ExpCondition, Task)),
+                linewidth = 1) +
+      geom_point(aes(y = RT,
+                     color = ExpCondition),
+                 size = 2) +
+      geom_errorbar(aes(y = RT,
+                        ymin = RT - se,
+                        ymax = RT + se), 
+                    width = 0.2, 
+                    linewidth = 0.5) +
+      
+      # # Add gpt2-large surprisal lines and points
+      # geom_line(aes(y = Gpt2Large_scaled), color = "gold",
+      #           linewidth = 1, linetype = "solid") +
+      # geom_point(aes(y = Gpt2Large_scaled), color = "gold", size = 2) +
+      # 
+      # # Add GPTNeo surprisal lines and points
+      # geom_line(aes(y = GPTNeo_scaled), color = "orange",
+      #           linewidth = 1, linetype = "solid") +
+      # geom_point(aes(y = GPTNeo_scaled), color = "orange", size = 2) +
+      # 
+      # # Add Llama surprisal lines and points
+      # geom_line(aes(y = Llama_scaled), color = "darkorange3",
+      #           linewidth = 1, linetype = "solid") +
+      # geom_point(aes(y = Llama_scaled), color = "darkorange3", size = 2) +
+      
+      # Add scaled surprisal lines and points
+      geom_line(aes(y = SurprisalValue, color = Measure),
+                linewidth = 1, linetype = "solid") +
+      geom_point(aes(y = SurprisalValue, color = Measure), size = 2) +
+
+      {if (as.numeric(item_no_char) < 1000)
+           annotate("rect", xmin = 5.5, xmax = 8.5, ymin = -Inf, ymax = Inf, 
+               fill = "gray", alpha = 0.3)} +
+      
+      labs(color = "Measure",
+           title = paste0("Reading Times: Item ", item_no_char)) +
+
+      scale_x_continuous(
+        name = "Word Position",
+        breaks = dat_plot_item$WordPosition,
+        sec.axis = sec_axis(~ ., name = "Word",
+                            breaks = dat_plot_item$WordPosition,
+                            labels = dat_plot_item$Word)
+      ) +
+      
+      ylab("Reading Time (ms)") +
+      # Secondary Y-Axis
+      scale_y_continuous(sec.axis = sec_axis(~ ., name = "Scaled surprisal")) +
+
+      # Custom color scale for the 3 surprisal measures
+      scale_color_manual(values = c("GPT2-Large" = "gold",
+                                    "GPTNeo" = "orange",
+                                    "Llama" = "darkorange3",
+                                    "High" = "navy",
+                                    "Low" = "steelblue1")) +
+      
+      theme_minimal() +
+      theme(
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold"),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        strip.text = element_text(size = 14, face = "bold"),
+        plot.background = element_rect(fill = "white", color = NA)
+      ) #+
+      #scale_color_manual(values = c("navy", "steelblue1"))
+    
+    plot_title <- paste0("./plots/item_plots_surprisal/item_", as.character(i), ".png")
+    ggsave(plot_title, plot = p, width=12, height=5, dpi=320)
+  }
+}
+```
+
+
+```{r delete, eval = FALSE}
+if (plot_inidividual_items_surprisal == TRUE) {
+  dat_plot <- summarySE(dat_surprisals_all,
+                        measurevar="RT",
+                        groupvars=c("Region", "ExpCondition",
+                                    "Task", "Item",
+                                    "WordPosition", "Word", "Gpt2Large"),
+                        na.rm=T)
+  dat_plot$WordPosition <- as.numeric(dat_plot$WordPosition)
+  summary(dat_plot$WordPosition)
+  
+  # for (i in c(1:80, 1001:1080)) {
+  for (i in unique(as.numeric(as.character(dat_plot$Item)))) {
+    dat_plot_item <- dat_plot %>% 
+      filter(Item == i) %>% 
+      group_by(WordPosition) %>%
+      mutate(Word = if_else(
+        WordPosition == 6,
+        paste(unique(Word[WordPosition == 6]), collapse = "/"),
+        Word)) %>%
+      ungroup()
+    item_no_char <- as.character(unique(dat_plot_item$Item))
+    
+    # Rescale surprisal to RTs
+    dat_plot_item <- dat_plot_item %>%
+      mutate(Gpt2Large_scaled = scales::rescale(Gpt2Large,
+                                                to = range(RT, na.rm = TRUE)))
+    
+    p <- ggplot(dat_plot_item,
+                aes(x = WordPosition)) +
+      
+      geom_line(aes(y = RT,
+                    color = ExpCondition,
+                    linetype = Task,
+                    group = interaction(ExpCondition, Task)),
+                linewidth = 1) +
+      geom_point(aes(y = RT,
+                     color = ExpCondition),
+                 size = 2) +
+      geom_errorbar(aes(y = RT,
+                        ymin = RT - se,
+                        ymax = RT + se), 
+                    width = 0.2, 
+                    linewidth = 0.5) +
+      
+      geom_line(aes(y = Gpt2Large_scaled, color = ExpCondition),
+                linewidth = 1, linetype = "solid") +
+      geom_point(aes(y = Gpt2Large_scaled, color = ExpCondition), size = 2) +
+      
+      {if (as.numeric(item_no_char) < 1000)
+           annotate("rect", xmin = 5.5, xmax = 8.5, ymin = -Inf, ymax = Inf, 
+               fill = "gray", alpha = 0.3)} +
+      
+      labs(color = "Expectancy",
+           title = paste0("Reading Times & Surprisal: Item ", item_no_char)) +
+      
+      scale_x_continuous(
+        name = "Word Position",
+        breaks = dat_plot_item$WordPosition,
+        sec.axis = sec_axis(~ ., name = "Word",
+                            breaks = dat_plot_item$WordPosition,
+                            labels = dat_plot_item$Word)
+      ) +
+      
+      ylab("Reading Time (ms)") +
+      # Secondary Y-Axis
+      scale_y_continuous(sec.axis = sec_axis(~ ., name = "gpt2-large")) +
+
+      scale_color_manual(values = c("navy", "steelblue1",
+                                    "darkorange", "lightsalmon")) +
+    
+      theme_minimal() +
+      theme(
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold"),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        strip.text = element_text(size = 14, face = "bold"),
+        plot.background = element_rect(fill = "white", color = NA)
+      )
+    
+    plot_title <- paste0("./plots/item_plots_surprisal/item_", as.character(i), ".png")
+    ggsave(plot_title, plot = p, width=12, height=5, dpi=320)
+  }
+}
+```
