@@ -155,14 +155,11 @@ check_filler_overlap(noun_set, filler_words)
 ```{r}
 dat %>% 
   group_by(cond) %>% 
-  summarize(mean(length))
-```
-
-
-```{r}
-dat %>% 
-  group_by(cond) %>% 
-  summarize(mean(cloze_prob))
+  summarise(MeanLength = mean(length),
+            MeanCloze = mean(cloze_prob),
+            MinCloze = min(cloze_prob),
+            MaxCloze = max(cloze_prob),
+            ClozeSD = sd(cloze_prob))
 ```
 
 

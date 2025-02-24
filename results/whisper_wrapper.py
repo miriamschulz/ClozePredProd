@@ -75,5 +75,5 @@ for (i, folder_path) in enumerate(sorted(folderpaths)):
     except subprocess.CalledProcessError as e:
         print(f"{red_font}Error executing script: {e}{reset_color}")
 
-print(f"\n{green_font}Wrapper script executed successfully.{reset_color}\n")
+print(f"{green_font}Wrapper script executed successfully.{reset_color}\n")
 os.system("say 'Finished all annotations.'")

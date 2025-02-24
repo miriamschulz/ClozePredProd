@@ -62,6 +62,36 @@ dat <- read.pcibex('results.csv')
 dat <- unique(dat)
 ```
 
+## Determine list of participants to exclude
+
+```{r}
+excluded_participants <- c(# FIRST PROLIFIC EXPERIMENT:
+                           "vuqqnd",  # non-native, super slow RTs
+                           "ee49u2",  # non-native
+                           "vznkz3",  # non-native?, some double submissions (technical problems)
+                           "3jw4ew",  # non-native
+                           "ps4dv4",  # non-native, did not understand the task
+                           # SECOND PROLIFIC EXPERIMENT:
+                           "2jcruh",  # non-native and makes a funny voice on many trials
+                           "e2zqww",  # read contexts aloud 
+                           "0jxphp",  # empty recordings, ~50% acc, super fast RTs [RETURNED]
+                           "m7ugwz",  # read contexts aloud (but faster than in comprehension)
+                           "jocpf0",  # non-native and timed out (restarted)
+                           "pizxpx",  # empty recordings
+                           "hpttkp",  # nonsense and repeating answers [RETURNED]
+                           "icak56",  # non-native??
+                           "8v42p8",  # non-native?, very slow on production RTs (~1000ms)
+                           "bdhmxy",  # non-native, very slow RTs in both tasks
+                           "glbu6a",  # non-native, repeated last context words, wrong browser [RETURNED]
+                           "6wqbuo",  # non-native
+                           "-u775t",  # technical problems: restarted 3x; loud background talking
+                           "ev0tqj",  # read contexts aloud in one prod block 
+                           "4ftnhn",  # no server data; born in Ghana; completion time too long
+                           "teg94q"   # non-native, comp accuracy ~50%, too many timeouts
+)
+```
+
+
 
 # Demographics (all participants)
 
@@ -71,6 +101,11 @@ dat <- unique(dat)
 dat.demogs <- dat %>%
   filter(PennElementName == 'demographics' | Parameter == "prolific_id") %>% 
   select(UniqueID, Parameter, Value)
+
+if (exclude_participants == TRUE) {
+  dat.demogs <- dat.demogs %>% 
+    filter(!UniqueID %in% excluded_participants)
+}
 
 # Fix whitespace characters
 dat.demogs$Value <- gsub('%2C', ',', dat.demogs$Value)   # commas instead of %2C
@@ -99,7 +134,7 @@ summary(dat.demogs$Gender)
 
 ## Prolific completion times
 
-```{r completion-time}
+```{r completion-time, eval = FALSE}
 # Add the prolific IDs
 demogs.prolific <- read.csv("demographics_prolific.csv", header=TRUE)
 demogs.prolific <- demogs.prolific %>%
@@ -144,6 +179,12 @@ write.csv(dat.demogs, "demographics.csv", row.names=FALSE)
 dat.survey <- dat %>%
   filter(PennElementName == 'postexp_survey') %>% 
   select(UniqueID, Parameter, Value)
+
+if (exclude_participants == TRUE) {
+  dat.survey <- dat.survey %>% 
+    filter(!UniqueID %in% excluded_participants)
+}
+
 dat.survey$Value <- gsub('%2C', ',', dat.survey$Value)   # commas instead of %2C
 dat.survey$Value <- gsub('%0A', ' ', dat.survey$Value)   # spaces instead of %0A
 
@@ -228,36 +269,9 @@ Exclude subjects who were not native speakers of English or failed the tasks:
 ```{r exclude-participants}
 if (exclude_participants == TRUE) {
   dat <- dat %>%
-    # nonnatives Prolific Exp 1
-    filter(!UniqueID %in% c(# FIRST PROLIFIC EXPERIMENT:
-                            "vuqqnd",  # non-native, super slow RTs
-                            "ee49u2",  # non-native
-                            "vznkz3",  # non-native?, some double submissions (technical problems)
-                            "3jw4ew",  # non-native
-                            "ps4dv4",  # non-native, did not understand the task
-                            # SECOND PROLIFIC EXPERIMENT:
-                            "2jcruh",  # non-native and makes a funny voice on many trials
-                            "e2zqww",  # read contexts aloud 
-                            "0jxphp",  # empty recordings, ~50% acc, super fast RTs [RETURNED]
-                            "m7ugwz",  # read contexts aloud (but faster than in comprehension)
-                            "jocpf0",  # non-native and timed out (restarted)
-                            "pizxpx",  # empty recordings
-                            "hpttkp",  # nonsense and repeating answers [RETURNED]
-                            "icak56",  # non-native??
-                            "8v42p8",  # non-native?, very slow on production RTs (~1000ms)
-                            "bdhmxy",  # non-native, very slow RTs in both tasks
-                            "glbu6a",  # non-native, repeated last context words, wrong browser [RETURNED]
-                            "6wqbuo",  # non-native
-                            "-u775t",  # technical problems: restarted 3x; loud background talking
-                            "ev0tqj",  # read contexts aloud in one prod block 
-                            "4ftnhn",  # no server data; born in Ghana; completion time too long
-                            "teg94q")  # non-native, comp accuracy ~50%, too many timeouts
-    )
+    filter(!UniqueID %in% excluded_participants)
 }
 ```
-
-
-## TODO: new demopgrahics of keep subjects
 
 
 # Checks
